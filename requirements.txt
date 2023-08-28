@@ -1,5 +1,5 @@
-gradio==3.32.0
-langchain==0.0.183
+gradio==3.40.1
+langchain==0.0.268
 Pillow==9.5.0
 pymavlink==2.4.37
 python-dotenv==1.0.0
