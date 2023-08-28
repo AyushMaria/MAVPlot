@@ -1,0 +1,10 @@
+gradio==3.32.0
+langchain==0.0.183
+Pillow==9.5.0
+pymavlink==2.4.37
+python-dotenv==1.0.0
+openai==0.27.7
+chromadb==0.3.25
+pymavlink==2.4.37
+matplotlib==3.7.1
+tiktoken==0.4.0
