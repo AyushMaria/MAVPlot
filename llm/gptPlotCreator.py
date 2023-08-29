@@ -1,22 +1,19 @@
 import re
-import random
-import linecache
+#import random
+#import linecache
 import subprocess
 from langchain.prompts import PromptTemplate
 from langchain.chat_models import ChatOpenAI
 from langchain.chains import LLMChain
-from langchain.llms import OpenAI
-from langchain.chains import ConversationChain
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts.chat import (
-    ChatPromptTemplate,
-    HumanMessagePromptTemplate,
-)
+#from langchain.llms import OpenAI
+#from langchain.chains import ConversationChain
+#from langchain.memory import ConversationBufferMemory
+#from langchain.prompts.chat import (ChatPromptTemplate, HumanMessagePromptTemplate)
 from langchain.vectorstores import Chroma
 from langchain.embeddings.openai import OpenAIEmbeddings
 import os
 from dotenv import load_dotenv
-from PIL import Image
+#from PIL import Image
 
 # Import required modules
 from pymavlink import mavutil
