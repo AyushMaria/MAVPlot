@@ -1,10 +1,28 @@
-gradio==3.40.1
-langchain==0.0.268
-Pillow==9.5.0
+# UI
+gradio>=4.0.0
+
+# LangChain — modern split packages (replaces monolithic langchain 0.0.x)
+langchain>=0.2.0
+langchain-openai>=0.1.0
+langchain-chroma>=0.1.0
+langchain-core>=0.2.0
+
+# OpenAI
+openai>=1.0.0
+
+# Vector store
+chromadb>=0.5.0
+
+# Drone log parsing
 pymavlink==2.4.37
-python-dotenv==1.0.0
-openai==0.27.7
-chromadb==0.3.25
+
+# Plotting
 matplotlib==3.7.1
-tiktoken==0.4.0
+
+# Sandboxed execution
 RestrictedPython==7.1
+
+# Utilities
+Pillow==9.5.0
+python-dotenv==1.0.0
+tiktoken>=0.5.0
