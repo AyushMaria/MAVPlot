@@ -2,7 +2,7 @@
 
 **A GPT-powered chatbot that turns natural language into drone flight plots.**
 
-Upload a MAVLink `.tlog` file, describe the data you want to visualise, and MAVPlot will write a Python script using `pymavlink` + `matplotlib`, execute it, and display the resulting plot — all inside a Gradio chat interface.
+Upload a MAVLink `.tlog` file, describe the data you want to visualise, and MAVPlot will write a Python script using `pymavlink` + `matplotlib`, execute it in a **sandboxed environment**, and display the resulting plot — all inside a Gradio chat interface.
 
 ![Architecture Diagram](docs/GPT_MAVPlot_Arch.png)
 
@@ -11,24 +11,26 @@ Upload a MAVLink `.tlog` file, describe the data you want to visualise, and MAVP
 ## How It Works
 
 ```
-User uploads .tlog file
+User uploads .tlog / .bin / .log file
         ↓
- parse_mavlink_log()  ←  pymavlink reads all message types & fields
+ validate_mavlink_file()  ←  extension, size, symlink, path-traversal checks
         ↓
- create_embeddings()  ←  OpenAI Ada-002 embeds each message type into ChromaDB
+ parse_mavlink_log()      ←  pymavlink reads all message types & fields
+        ↓
+ _create_embeddings()     ←  OpenAI text-embedding-3-small → persisted ChromaDB
         ↓
 User sends a chat prompt  (e.g. "Plot altitude over time")
         ↓
  find_relevant_data_types()  ←  semantic search in ChromaDB
         ↓
- create_plot()  ←  GPT writes a pymavlink + matplotlib script
+ create_plot()  ←  GPT writes a pymavlink + matplotlib script (LCEL pipeline)
         ↓
- run_script()  ←  script executed via subprocess
+ run_script()   ←  RestrictedPython sandbox (no subprocess, no os, no network)
         ↓
     Plot image returned to chat  +  generated code shown
 ```
 
-If the generated script throws an error, `attempt_to_fix_script()` automatically feeds the error and the original script back to GPT for a self-healing retry.
+If the generated script throws an error, `attempt_to_fix_script()` feeds the error back to GPT for up to **2 self-healing retries**.
 
 ---
 
@@ -36,10 +38,16 @@ If the generated script throws an error, `attempt_to_fix_script()` automatically
 
 - **Natural language → plot** — describe any flight data in plain English
 - **Auto log parsing** — extracts all MAVLink message types and fields automatically
-- **Semantic data type search** — uses vector embeddings to find the most relevant data fields for your query
-- **Self-healing scripts** — if the generated script fails, GPT debugs and retries it automatically
+- **Semantic data type search** — vector embeddings find the most relevant fields for your query
+- **Self-healing scripts** — GPT debugs and retries failed scripts automatically (up to 2×)
+- **Sandboxed execution** — generated code runs in RestrictedPython; no shell access
+- **File validation** — only `.tlog` / `.bin` / `.log` accepted; symlinks and path traversal blocked
+- **Persisted vector store** — ChromaDB saved to disk; re-uploading won't re-embed
 - **Code transparency** — the generated Python script is shown alongside every plot
-- **Gradio UI** — clean web interface with file upload and chat, no frontend code needed
+- **Progress bar** — real-time progress during parsing and generation
+- **Status indicator** — live chip shows idle / uploading / ready / thinking / error
+- **Reset button** — clear session and start fresh without a page reload
+- **Gradio 4.x UI** — modern chat interface with copy button and streaming output
 - **Configurable model** — swap GPT models via the `.env` file
 
 ---
@@ -48,13 +56,13 @@ If the generated script throws an error, `attempt_to_fix_script()` automatically
 
 | Layer | Technology |
 |---|---|
-| UI | Gradio 3.40 |
-| LLM | OpenAI GPT (via LangChain) |
-| Embeddings | OpenAI `text-embedding-ada-002` |
-| Vector Store | ChromaDB |
+| UI | Gradio ≥ 4.0 |
+| LLM | OpenAI GPT via `langchain-openai` (LCEL) |
+| Embeddings | OpenAI `text-embedding-3-small` |
+| Vector Store | ChromaDB ≥ 0.5 (persisted) |
+| Sandbox | RestrictedPython 7.1 |
 | Drone Log Parsing | pymavlink 2.4.37 |
 | Plotting | matplotlib 3.7.1 |
-| Orchestration | LangChain 0.0.268 |
 | Config | python-dotenv |
 
 ---
@@ -63,14 +71,24 @@ If the generated script throws an error, `attempt_to_fix_script()` automatically
 
 ```
 MAVPlot/
-├── app.py                    # Gradio UI and chat event handlers
+├── app.py                      # Gradio 4.x UI and chat event handlers
 ├── llm/
-│   └── gptPlotCreator.py     # PlotCreator class — core LLM + plotting logic
+│   ├── gptPlotCreator.py       # PlotCreator — core LLM + plotting logic (LCEL)
+│   ├── safe_executor.py        # RestrictedPython sandbox for generated scripts
+│   └── file_validator.py       # Upload validation (extension, size, symlink)
+├── tests/
+│   ├── test_extract_code_snippets.py
+│   ├── test_file_validator.py
+│   └── test_safe_executor.py
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # GitHub Actions: lint (ruff) + pytest on push
 ├── docs/
-│   └── GPT_MAVPlot_Arch.png  # Architecture diagram
-├── target/                   # Output directory for generated plot.py and plot.png
-├── template.env              # Environment variable template
-├── requirements.txt          # Python dependencies
+│   └── GPT_MAVPlot_Arch.png
+├── target/                     # Output directory for plot.py and plot.png
+├── chroma_db/                  # Persisted ChromaDB vector store (git-ignored)
+├── template.env                # Environment variable template
+├── requirements.txt            # Python dependencies
 └── LICENSE
 ```
 
@@ -78,8 +96,8 @@ MAVPlot/
 
 ## Prerequisites
 
-- Python 3.9+
-- An **OpenAI API key** with access to the model you want to use (default: `gpt-3.5-turbo`)
+- Python **3.10+**
+- An **OpenAI API key** — [get one here](https://platform.openai.com/api-keys)
 
 ---
 
@@ -91,64 +109,86 @@ git clone https://github.com/AyushMaria/MAVPlot.git
 cd MAVPlot
 ```
 
-**2. Install dependencies**
+**2. Create and activate a virtual environment**
+```bash
+python -m venv venv
+
+# macOS / Linux
+source venv/bin/activate
+
+# Windows
+venv\Scripts\activate
+```
+
+**3. Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-**3. Configure environment variables**
+**4. Configure environment variables**
 
-Copy `template.env` to `.env` and fill in your values:
+Copy `template.env` to `.env` and add your OpenAI API key:
 ```bash
 cp template.env .env
 ```
 
 ```env
 OPENAI_API_KEY=sk-your-openai-api-key-here
-OPENAI_MODEL=gpt-3.5-turbo
+OPENAI_MODEL=gpt-3.5-turbo   # or gpt-4, gpt-4o
 ```
 
-> You can swap `gpt-3.5-turbo` for `gpt-4` or any other model you have access to.
+> ⚠️ Never commit your `.env` file — it is listed in `.gitignore`.
 
-**4. Run the app**
+**5. Run the app**
 ```bash
 python app.py
 ```
 
-Open the local Gradio URL shown in the terminal (usually `http://127.0.0.1:7860`).
+Open the Gradio URL shown in the terminal (usually `http://127.0.0.1:7860`).
 
 ---
 
 ## Usage
 
-1. **Upload a `.tlog` file** — click the upload button (📁) in the chat interface
-2. Wait for MAVPlot to parse the log and confirm it's ready
-3. **Type a plot request**, for example:
-   - `"Plot altitude over time"`
-   - `"Show me GPS latitude and longitude"`
-   - `"Plot battery voltage and current"`
-4. MAVPlot will:
-   - Find relevant MAVLink message types using semantic search
-   - Generate a Python plotting script with GPT
-   - Run the script and display the plot
-   - Show the generated code in the chat
+1. Click **📁** and upload a MAVLink `.tlog`, `.bin`, or `.log` file
+2. Wait for the progress bar — MAVPlot parses the log and builds a vector index
+3. Type a plot request, for example:
+   - `Plot altitude over time`
+   - `Show GPS latitude and longitude`
+   - `Plot battery voltage and current`
+4. MAVPlot will find relevant fields, generate a script, run it in a sandbox, and show the plot + code
+5. Click **🔄 Reset session** to start fresh with a new log file
 
 > **Need a sample log file?**  
-> Download one here: https://drive.google.com/file/d/1BKv-NbSvYQz9XqqmyOyOhe3o4PAFDyZa/view?usp=sharing
+> [Download here](https://drive.google.com/file/d/1BKv-NbSvYQz9XqqmyOyOhe3o4PAFDyZa/view?usp=sharing)
+
+---
+
+## Running Tests
+
+```bash
+pip install pytest pytest-cov ruff
+pytest tests/ -v --cov=llm
+```
+
+To lint:
+```bash
+ruff check llm/ app.py
+```
 
 ---
 
 ## PlotCreator Class
 
-The core logic lives in `llm/gptPlotCreator.py` in the `PlotCreator` class:
+The core logic lives in `llm/gptPlotCreator.py`:
 
 | Method | Description |
 |---|---|
 | `parse_mavlink_log()` | Reads `.tlog`, extracts all message types and field names |
-| `create_embeddings()` | Embeds each message type into a local ChromaDB vector store |
+| `_create_embeddings()` | Embeds each message type into a persisted ChromaDB vector store |
 | `find_relevant_data_types()` | Semantic similarity search to find fields matching the user query |
-| `create_plot()` | Calls GPT to generate a `pymavlink` + `matplotlib` Python script |
-| `run_script()` | Executes the generated script via `subprocess` |
+| `create_plot()` | Calls GPT via LCEL to generate a `pymavlink` + `matplotlib` script |
+| `run_script()` | Executes the script in the RestrictedPython sandbox |
 | `attempt_to_fix_script()` | Feeds errors back to GPT for automatic script debugging |
 
 ---
@@ -157,11 +197,12 @@ The core logic lives in `llm/gptPlotCreator.py` in the `PlotCreator` class:
 
 | Issue | Cause | Fix |
 |---|---|---|
-| `AuthenticationError` | Invalid or missing OpenAI API key | Check your `.env` file has the correct `OPENAI_API_KEY` |
-| `ModuleNotFoundError: pymavlink` | Missing dependency | Run `pip install -r requirements.txt` |
-| Plot not generated | GPT script failed twice | Check that your log file is a valid `.tlog`; try a more specific prompt |
-| `chromadb` version conflict | Dependency mismatch | Use a fresh virtual environment with pinned versions from `requirements.txt` |
-| `gr.Chatbot.style()` deprecation | Gradio version mismatch | Use exactly `gradio==3.40.1` as pinned in `requirements.txt` |
+| `AuthenticationError` | Invalid or missing OpenAI API key | Check `.env` has the correct `OPENAI_API_KEY` |
+| `ModuleNotFoundError` | Missing dependency | Run `pip install -r requirements.txt` in your venv |
+| `ImportError: RestrictedPython` | Package not installed | `pip install RestrictedPython==7.1` |
+| Plot not generated after 2 retries | GPT script failed twice | Try a more specific prompt; check the log is a valid `.tlog` |
+| `FileValidationError` | Wrong file type or empty file | Only `.tlog`, `.bin`, `.log` are accepted |
+| ChromaDB version conflict | Dependency mismatch | Use a fresh `venv` with `pip install -r requirements.txt` |
 
 ---
 
