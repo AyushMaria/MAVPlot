@@ -4,9 +4,11 @@ llm/safe_executor.py
 Sandboxed execution of GPT-generated Python plotting scripts.
 
 Strategy:
-  - Parse the code with compile() to catch SyntaxErrors before execution.
-  - Run in a subprocess with a strict import allowlist enforced by a custom
-    __import__ hook injected into the script preamble.
+  - Compile the code first to catch SyntaxErrors cheaply.
+  - Run in a child subprocess so any crash is isolated.
+  - Inject a __import__ hook that uses a DENYLIST (not an allowlist).
+    An allowlist breaks stdlib internals: e.g. `import json` triggers
+    `import _io` internally, which would be silently blocked.
   - Kill the subprocess after timeout_seconds to prevent infinite loops.
 """
 
@@ -18,23 +20,8 @@ import sys
 import tempfile
 import textwrap
 
-# Modules the generated script is allowed to import
-ALLOWED_MODULES = {
-    "matplotlib",
-    "matplotlib.pyplot",
-    "matplotlib.dates",
-    "pymavlink",
-    "pymavlink.mavutil",
-    "math",
-    "json",
-    "collections",
-    "itertools",
-    "numpy",
-    "datetime",
-    "re",
-    "struct",
-}
-
+# Modules the generated script must NEVER be allowed to import.
+# Internal C-extension names (leading underscore) are allowed so stdlib works.
 BLOCKED_MODULES = {
     "os",
     "subprocess",
@@ -43,22 +30,43 @@ BLOCKED_MODULES = {
     "socket",
     "importlib",
     "ctypes",
-    "builtins",
     "signal",
+    "pty",
+    "tty",
+    "termios",
+    "fcntl",
+    "pwd",
+    "grp",
+    "resource",
+    "multiprocessing",
+    "threading",
+    "concurrent",
+    "asyncio",
+    "urllib",
+    "http",
+    "ftplib",
+    "smtplib",
+    "telnetlib",
+    "xmlrpc",
+    "pickle",
+    "shelve",
+    "dbm",
+    "sqlite3",
 }
 
 # Preamble injected at the top of every generated script.
-# Uses !r so the set literal is valid Python when written to the temp file.
 _PREAMBLE = textwrap.dedent("""\
     import builtins as _builtins
     _real_import = _builtins.__import__
-    _ALLOWED = {allowed!r}
     _BLOCKED = {blocked!r}
 
     def _safe_import(name, *args, **kwargs):
         top = name.split(".")[0]
-        if top in _BLOCKED or (top not in _ALLOWED and name not in _ALLOWED):
-            raise ImportError(f"Import '{{name}}' is not allowed in this sandbox.")
+        # Allow internal C-extensions (e.g. _io, _json) needed by stdlib
+        if not top.startswith("_") and top in _BLOCKED:
+            raise ImportError(
+                f"Import '{{name}}' is not allowed in this sandbox."
+            )
         return _real_import(name, *args, **kwargs)
 
     _builtins.__import__ = _safe_import
@@ -85,10 +93,7 @@ def execute_script(
     except SyntaxError as exc:
         return False, f"SyntaxError: {exc}"
 
-    preamble = _PREAMBLE.format(
-        allowed=ALLOWED_MODULES,
-        blocked=BLOCKED_MODULES,
-    )
+    preamble = _PREAMBLE.format(blocked=BLOCKED_MODULES)
     full_code = preamble + "\n" + code
 
     # 2. Write to a temp file and run in a subprocess
