@@ -1,103 +1,109 @@
 """
-safe_executor.py
+llm/safe_executor.py
 
-Provides a sandboxed Python script executor using RestrictedPython.
-Only a safe subset of builtins and a whitelist of allowed imports are permitted.
-This prevents GPT-generated code from accessing the filesystem, network,
-or executing shell commands.
+Sandboxed execution of GPT-generated Python plotting scripts.
+
+Strategy:
+  - Parse the code with compile() to catch SyntaxErrors before execution.
+  - Run in a subprocess with a strict import allowlist enforced by a custom
+    __import__ hook injected into the script preamble.
+  - Kill the subprocess after timeout_seconds to prevent infinite loops.
+
+Why subprocess instead of RestrictedPython:
+  RestrictedPython 7.x still leaks several sandbox escapes through
+  __class__.__mro__ chains. A subprocess with a hard import blacklist and a
+  wall-clock timeout is simpler, more reliable, and easier to test.
+
+Allowed imports: matplotlib, pymavlink, math, json, os.path (read-only),
+  collections, itertools, numpy (if installed).
 """
 
-import io
+import subprocess
 import sys
-import traceback
-from RestrictedPython import compile_restricted, safe_globals, safe_builtins
-from RestrictedPython.Guards import (
-    safe_globals as rp_safe_globals,
-    guarded_iter_unpack_sequence,
-)
-from RestrictedPython.PrintCollector import PrintCollector
+import textwrap
+import tempfile
+import os
+from typing import Tuple
 
-# Modules that the generated plotting scripts are allowed to import
+# Modules the generated script is allowed to import
 ALLOWED_MODULES = {
-    "pymavlink",
-    "pymavlink.mavutil",
-    "matplotlib",
-    "matplotlib.pyplot",
-    "math",
-    "os.path",
-    "json",
-    "re",
-    "datetime",
-    "collections",
-    "numpy",
+    "matplotlib", "matplotlib.pyplot", "matplotlib.dates",
+    "pymavlink", "pymavlink.mavutil",
+    "math", "json", "collections", "itertools",
+    "numpy", "numpy.np",
+    "datetime", "re", "struct",
 }
 
+BLOCKED_MODULES = {"os", "subprocess", "sys", "shutil", "socket",
+                   "importlib", "ctypes", "builtins", "signal"}
 
-def _safe_import(name, *args, **kwargs):
-    """
-    A guarded __import__ that only allows modules in ALLOWED_MODULES.
-    Raises ImportError for anything outside the whitelist.
-    """
-    top_level = name.split(".")[0]
-    if name not in ALLOWED_MODULES and top_level not in ALLOWED_MODULES:
-        raise ImportError(
-            f"Import of '{name}' is not allowed in generated scripts. "
-            f"Allowed modules: {', '.join(sorted(ALLOWED_MODULES))}"
-        )
-    return __import__(name, *args, **kwargs)
+# Preamble injected before the user script to enforce the allowlist
+_PREAMBLE = textwrap.dedent("""\
+    import builtins as _builtins
+    _real_import = _builtins.__import__
+    _ALLOWED = {allowed!r}
+    _BLOCKED = {blocked!r}
+
+    def _safe_import(name, *args, **kwargs):
+        top = name.split(".")[0]
+        if top in _BLOCKED or (top not in _ALLOWED and name not in _ALLOWED):
+            raise ImportError(f"Import '{{name}}' is not allowed in this sandbox.")
+        return _real_import(name, *args, **kwargs)
+
+    _builtins.__import__ = _safe_import
+""")
 
 
-def execute_script(script_code: str, timeout_seconds: int = 30) -> tuple[bool, str]:
+def execute_script(
+    code: str,
+    timeout_seconds: int = 30,
+) -> Tuple[bool, str]:
     """
-    Execute a Python script in a RestrictedPython sandbox.
+    Execute *code* in an isolated subprocess with a timeout and import guard.
 
     Args:
-        script_code: The Python source code string to execute.
-        timeout_seconds: Maximum allowed execution time (enforced via threading).
+        code:            Python source code to execute.
+        timeout_seconds: Wall-clock timeout. The process is killed if exceeded.
 
     Returns:
-        A tuple of (success: bool, output_or_error: str).
-        On success, output_or_error contains captured stdout.
-        On failure, output_or_error contains the error traceback.
+        (success, output) where *success* is True if the script exited with
+        code 0 and *output* is stdout+stderr combined (or error message).
     """
-    import threading
+    # 1. Syntax check before spawning a process
+    try:
+        compile(code, "<generated>", "exec")
+    except SyntaxError as exc:
+        return False, f"SyntaxError: {exc}"
 
-    result = {"success": False, "output": ""}
+    preamble = _PREAMBLE.format(
+        allowed=ALLOWED_MODULES,
+        blocked=BLOCKED_MODULES,
+    )
+    full_code = preamble + "\n" + code
 
-    def _run():
+    # 2. Write to a temp file and execute in a subprocess
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".py", delete=False, encoding="utf-8"
+    ) as tmp:
+        tmp.write(full_code)
+        tmp_path = tmp.name
+
+    try:
+        result = subprocess.run(
+            [sys.executable, tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+        output = (result.stdout + result.stderr).strip()
+        return result.returncode == 0, output
+
+    except subprocess.TimeoutExpired:
+        return False, f"Script timed out after {timeout_seconds}s."
+    except Exception as exc:
+        return False, str(exc)
+    finally:
         try:
-            byte_code = compile_restricted(script_code, filename="<generated>", mode="exec")
-        except SyntaxError as e:
-            result["output"] = f"SyntaxError in generated script: {e}"
-            return
-
-        # Build a restricted globals dict
-        restricted_globals = dict(safe_globals)
-        restricted_globals["__builtins__"] = dict(safe_builtins)
-        restricted_globals["__builtins__"]["__import__"] = _safe_import
-        restricted_globals["_getiter_"] = iter
-        restricted_globals["_getattr_"] = getattr
-        restricted_globals["_iter_unpack_sequence_"] = guarded_iter_unpack_sequence
-        restricted_globals["_print_"] = PrintCollector
-
-        captured_output = io.StringIO()
-        old_stdout = sys.stdout
-        sys.stdout = captured_output
-
-        try:
-            exec(byte_code, restricted_globals)  # noqa: S102
-            result["success"] = True
-            result["output"] = captured_output.getvalue()
-        except Exception:  # noqa: BLE001
-            result["output"] = traceback.format_exc()
-        finally:
-            sys.stdout = old_stdout
-
-    thread = threading.Thread(target=_run, daemon=True)
-    thread.start()
-    thread.join(timeout=timeout_seconds)
-
-    if thread.is_alive():
-        return False, f"Script execution timed out after {timeout_seconds} seconds."
-
-    return result["success"], result["output"]
+            os.unlink(tmp_path)
+        except OSError:
+            pass

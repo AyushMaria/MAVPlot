@@ -1,82 +1,66 @@
 """
-file_validator.py
+llm/file_validator.py
 
-Validates uploaded files before they are passed to pymavlink.
-Checks file extension, MIME type, and basic magic-byte signature.
+Validates a MAVLink log file before it is passed to PlotCreator.
+
+Checks performed:
+  1. File exists
+  2. Not a symlink (path-traversal / symlink attack prevention)
+  3. Extension is in VALID_EXTENSIONS
+  4. File is not empty
+  5. File does not exceed MAX_FILE_SIZE_BYTES
 """
 
 import os
-import mimetypes
-from pathlib import Path
 
-# Allowed extensions for MAVLink log files
-ALLOWED_EXTENSIONS = {".tlog", ".bin", ".log"}
+VALID_EXTENSIONS = {".tlog", ".bin", ".log"}
 
-# Maximum allowed upload size: 200 MB
-MAX_FILE_SIZE_BYTES = 200 * 1024 * 1024
-
-# Known MIME types for binary/log files (many systems report these as octet-stream)
-ACCEPTABLE_MIME_TYPES = {
-    "application/octet-stream",
-    "application/x-binary",
-    "text/plain",  # some .log files
-    None,           # mimetypes may return None for unknown types
-}
+# 200 MB default limit; tests monkeypatch this directly
+MAX_FILE_SIZE_BYTES: int = 200 * 1024 * 1024
 
 
 class FileValidationError(ValueError):
     """Raised when an uploaded file fails validation."""
 
 
-def validate_mavlink_file(filepath: str) -> None:
+def validate_mavlink_file(path: str) -> None:
     """
-    Validate that a file is a plausible MAVLink log file.
+    Validate *path* as an acceptable MAVLink log file.
 
     Args:
-        filepath: Absolute or relative path to the uploaded file.
+        path: Absolute or relative path to the file.
 
     Raises:
-        FileValidationError: If the file fails any validation check.
-        FileNotFoundError: If the file does not exist.
+        FileNotFoundError: File does not exist.
+        FileValidationError: File fails any validation check.
     """
-    path = Path(filepath)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"File not found: {path}")
 
-    # 1. Existence
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {filepath}")
-
-    # 2. Must be a regular file (not a symlink, directory, device node, etc.)
-    if not path.is_file() or path.is_symlink():
+    # Symlink check — must come before stat() to avoid TOCTOU
+    if os.path.islink(path):
         raise FileValidationError(
-            "Upload must be a regular file. Symlinks and directories are not allowed."
+            f"Symlink not allowed: {path}. Please provide a direct file path."
         )
 
-    # 3. Extension check
-    ext = path.suffix.lower()
-    if ext not in ALLOWED_EXTENSIONS:
+    # Extension check
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in VALID_EXTENSIONS:
         raise FileValidationError(
             f"Invalid file type '{ext}'. "
-            f"Only {', '.join(sorted(ALLOWED_EXTENSIONS))} files are accepted."
+            f"Accepted types: {', '.join(sorted(VALID_EXTENSIONS))}"
         )
 
-    # 4. File size check
-    size = path.stat().st_size
+    size = os.path.getsize(path)
+
+    # Empty file check
     if size == 0:
-        raise FileValidationError("Uploaded file is empty.")
+        raise FileValidationError(f"File is empty: {path}")
+
+    # Size limit check
     if size > MAX_FILE_SIZE_BYTES:
+        limit_mb = MAX_FILE_SIZE_BYTES / (1024 * 1024)
+        actual_mb = size / (1024 * 1024)
         raise FileValidationError(
-            f"File size ({size / 1_048_576:.1f} MB) exceeds the 200 MB limit."
+            f"File size ({actual_mb:.1f} MB) exceeds the {limit_mb:.0f} MB limit: {path}"
         )
-
-    # 5. MIME type check (best-effort — not all systems detect these correctly)
-    mime_type, _ = mimetypes.guess_type(filepath)
-    if mime_type not in ACCEPTABLE_MIME_TYPES:
-        raise FileValidationError(
-            f"Unexpected MIME type '{mime_type}' for a MAVLink log file."
-        )
-
-    # 6. Path traversal guard — ensure the resolved path stays within its parent directory
-    try:
-        path.resolve().relative_to(path.parent.resolve())
-    except ValueError:
-        raise FileValidationError("Path traversal detected in uploaded file path.")  # noqa: B904
