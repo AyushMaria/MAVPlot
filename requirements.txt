@@ -5,6 +5,6 @@ pymavlink==2.4.37
 python-dotenv==1.0.0
 openai==0.27.7
 chromadb==0.3.25
-pymavlink==2.4.37
 matplotlib==3.7.1
 tiktoken==0.4.0
+RestrictedPython==7.1
