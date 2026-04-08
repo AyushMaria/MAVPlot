@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# !! Secret environment file — NEVER commit this !!
+.env
+
+# MAVLink log files (can be large; don't commit test logs)
+*.tlog
+*.bin
+
+# Generated output
+target/plot.py
+target/plot.png
+
+# ChromaDB local vector store
+chroma_db/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# pytest
+.pytest_cache/
+htmlcov/
+.coverage
