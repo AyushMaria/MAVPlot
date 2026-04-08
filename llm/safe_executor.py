@@ -6,9 +6,10 @@ Sandboxed execution of GPT-generated Python plotting scripts.
 Strategy:
   - Compile the code first to catch SyntaxErrors cheaply.
   - Run in a child subprocess so any crash is isolated.
-  - Inject a __import__ hook that uses a DENYLIST (not an allowlist).
-    An allowlist breaks stdlib internals: e.g. `import json` triggers
-    `import _io` internally, which would be silently blocked.
+  - Inject a __import__ hook that uses a DENYLIST checked against the
+    caller's __file__. This means stdlib modules loading their own
+    transitive dependencies (e.g. json -> re -> enum -> sys) are NOT
+    blocked — only direct imports from the user script itself are.
   - Kill the subprocess after timeout_seconds to prevent infinite loops.
 """
 
@@ -20,8 +21,7 @@ import sys
 import tempfile
 import textwrap
 
-# Modules the generated script must NEVER be allowed to import.
-# Internal C-extension names (leading underscore) are allowed so stdlib works.
+# Modules the generated script must NEVER import directly.
 BLOCKED_MODULES = {
     "os",
     "subprocess",
@@ -46,8 +46,6 @@ BLOCKED_MODULES = {
     "http",
     "ftplib",
     "smtplib",
-    "telnetlib",
-    "xmlrpc",
     "pickle",
     "shelve",
     "dbm",
@@ -55,18 +53,28 @@ BLOCKED_MODULES = {
 }
 
 # Preamble injected at the top of every generated script.
+#
+# The hook inspects the *caller's* __file__: if the import was triggered
+# directly from the user script (caller_file == _SCRIPT) we enforce the
+# denylist.  Imports triggered by stdlib loading its own sub-modules
+# (e.g. json -> re -> enum -> sys) come from a different __file__ and are
+# allowed through, so `import json` / `import math` etc. work correctly.
 _PREAMBLE = textwrap.dedent("""\
     import builtins as _builtins
+    import sys as _sys
     _real_import = _builtins.__import__
     _BLOCKED = {blocked!r}
+    _SCRIPT = __file__
 
     def _safe_import(name, *args, **kwargs):
         top = name.split(".")[0]
-        # Allow internal C-extensions (e.g. _io, _json) needed by stdlib
-        if not top.startswith("_") and top in _BLOCKED:
-            raise ImportError(
-                f"Import '{{name}}' is not allowed in this sandbox."
-            )
+        if top in _BLOCKED:
+            frame = _sys._getframe(1)
+            caller_file = frame.f_globals.get("__file__", "") or ""
+            if caller_file == _SCRIPT:
+                raise ImportError(
+                    f"Import '{{name}}' is not allowed in this sandbox."
+                )
         return _real_import(name, *args, **kwargs)
 
     _builtins.__import__ = _safe_import
