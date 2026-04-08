@@ -8,36 +8,47 @@ Strategy:
   - Run in a subprocess with a strict import allowlist enforced by a custom
     __import__ hook injected into the script preamble.
   - Kill the subprocess after timeout_seconds to prevent infinite loops.
-
-Why subprocess instead of RestrictedPython:
-  RestrictedPython 7.x still leaks several sandbox escapes through
-  __class__.__mro__ chains. A subprocess with a hard import blacklist and a
-  wall-clock timeout is simpler, more reliable, and easier to test.
-
-Allowed imports: matplotlib, pymavlink, math, json, os.path (read-only),
-  collections, itertools, numpy (if installed).
 """
 
+from __future__ import annotations
+
+import os
 import subprocess
 import sys
-import textwrap
 import tempfile
-import os
-from typing import Tuple
+import textwrap
 
 # Modules the generated script is allowed to import
 ALLOWED_MODULES = {
-    "matplotlib", "matplotlib.pyplot", "matplotlib.dates",
-    "pymavlink", "pymavlink.mavutil",
-    "math", "json", "collections", "itertools",
-    "numpy", "numpy.np",
-    "datetime", "re", "struct",
+    "matplotlib",
+    "matplotlib.pyplot",
+    "matplotlib.dates",
+    "pymavlink",
+    "pymavlink.mavutil",
+    "math",
+    "json",
+    "collections",
+    "itertools",
+    "numpy",
+    "datetime",
+    "re",
+    "struct",
 }
 
-BLOCKED_MODULES = {"os", "subprocess", "sys", "shutil", "socket",
-                   "importlib", "ctypes", "builtins", "signal"}
+BLOCKED_MODULES = {
+    "os",
+    "subprocess",
+    "sys",
+    "shutil",
+    "socket",
+    "importlib",
+    "ctypes",
+    "builtins",
+    "signal",
+}
 
-# Preamble injected before the user script to enforce the allowlist
+# Preamble injected at the top of every generated script.
+# Uses !r so the set literal is valid Python when written to the temp file.
 _PREAMBLE = textwrap.dedent("""\
     import builtins as _builtins
     _real_import = _builtins.__import__
@@ -57,7 +68,7 @@ _PREAMBLE = textwrap.dedent("""\
 def execute_script(
     code: str,
     timeout_seconds: int = 30,
-) -> Tuple[bool, str]:
+) -> tuple:
     """
     Execute *code* in an isolated subprocess with a timeout and import guard.
 
@@ -66,8 +77,7 @@ def execute_script(
         timeout_seconds: Wall-clock timeout. The process is killed if exceeded.
 
     Returns:
-        (success, output) where *success* is True if the script exited with
-        code 0 and *output* is stdout+stderr combined (or error message).
+        (success, output) — success is True if exit code is 0.
     """
     # 1. Syntax check before spawning a process
     try:
@@ -81,7 +91,7 @@ def execute_script(
     )
     full_code = preamble + "\n" + code
 
-    # 2. Write to a temp file and execute in a subprocess
+    # 2. Write to a temp file and run in a subprocess
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".py", delete=False, encoding="utf-8"
     ) as tmp:
@@ -99,7 +109,7 @@ def execute_script(
         return result.returncode == 0, output
 
     except subprocess.TimeoutExpired:
-        return False, f"Script timed out after {timeout_seconds}s."
+        return False, f"script timed out after {timeout_seconds}s."
     except Exception as exc:
         return False, str(exc)
     finally:

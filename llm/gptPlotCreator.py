@@ -7,23 +7,16 @@ Core MAVPlot logic:
   3. Use semantic search to find relevant fields for a user query
   4. Generate a pymavlink + matplotlib script via GPT (LCEL pipeline)
   5. Execute the script, self-healing up to max_retries times on failure
-
-All improvements applied:
-  - Class-level mutable state removed (all attrs in __init__)       #2
-  - Typo attempt_to_fix_sctript fixed                              #3
-  - bare except: replaced with specific exceptions + logging        #4
-  - LangChain migrated to LCEL (langchain_openai, langchain_chroma) #5
-  - Embeddings upgraded to text-embedding-3-small                  #6
-  - ChromaDB persisted to disk per log file                        #7
-  - Multi-retry self-healing loop (default max_retries=3)          #8
-  - File extension validation before parsing                       #9
 """
+
+from __future__ import annotations
 
 import json
 import logging
 import os
 import re
 import subprocess
+from typing import Optional
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
@@ -47,21 +40,19 @@ class PlotCreator:
             script fails. Defaults to 3.
     """
 
-    def __init__(self, max_retries: int = 3):
+    def __init__(self, max_retries: int = 3) -> None:
         load_dotenv()
 
-        # #2 — all mutable state lives in __init__, never at class level
         self.logfile_name: str = ""
         self.script_path: str = ""
         self.plot_path: str = ""
         self.last_code: str = ""
         self.message_types: dict = {}
-        self.db: Chroma | None = None
+        self.db: Optional[Chroma] = None
         self.max_retries: int = max_retries
 
         self.model: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 
-        # #5 — LCEL: prompt | llm | parser  (no LLMChain)
         llm = ChatOpenAI(model_name=self.model, max_tokens=2000, temperature=0)
 
         plot_prompt = PromptTemplate(
@@ -100,7 +91,7 @@ class PlotCreator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def extract_code_snippets(text: str) -> list[str]:
+    def extract_code_snippets(text: str) -> list:
         """
         Extract fenced code blocks from *text*.
 
@@ -121,7 +112,6 @@ class PlotCreator:
 
     def set_logfile_name(self, filename: str) -> None:
         """Register *filename* as the active log file and derive output paths."""
-        # #9 — validate extension
         ext = os.path.splitext(filename)[1].lower()
         if ext not in VALID_EXTENSIONS:
             raise ValueError(
@@ -169,7 +159,7 @@ class PlotCreator:
             except KeyboardInterrupt:
                 logger.info("Log parsing interrupted by user.")
                 break
-            except Exception as exc:  # #4 — named exception + logging
+            except Exception as exc:
                 logger.warning("Error reading MAVLink message: %s", exc)
                 break
 
@@ -183,19 +173,12 @@ class PlotCreator:
     def _create_embeddings(self, message_types: dict) -> None:
         """
         Embed each message type into a persisted ChromaDB collection.
-
-        #6 — uses text-embedding-3-small
-        #7 — persists to <log_dir>/chroma_db/
         """
-        texts = [
-            json.dumps({mt: message_types[mt]}) for mt in message_types
-        ]
+        texts = [json.dumps({mt: message_types[mt]}) for mt in message_types]
         logger.info("Creating embeddings for %d message types.", len(texts))
 
-        # #6 — text-embedding-3-small
         embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
-        # #7 — persist next to the log file so re-uploads reuse the index
         persist_dir = os.path.join(
             os.path.dirname(self.logfile_name), "chroma_db"
         )
@@ -240,10 +223,10 @@ class PlotCreator:
         return code[0]
 
     # ------------------------------------------------------------------
-    # Script execution with self-healing  (#8)
+    # Script execution with self-healing
     # ------------------------------------------------------------------
 
-    def attempt_to_fix_script(self, error_message: str) -> str:  # #3 — typo fixed
+    def attempt_to_fix_script(self, error_message: str) -> str:
         """
         Ask GPT to fix the last failing script.
 
@@ -262,20 +245,20 @@ class PlotCreator:
                 "error": error_message,
                 "script": script,
             })
-        except Exception as exc:  # #4
+        except Exception as exc:
             logger.error("GPT fix request failed: %s", exc)
-            return script  # return original; outer loop will count this as a failed attempt
+            return script
 
         logger.debug("GPT fix response:\n%s", response)
         fixed = self.extract_code_snippets(response)[0]
         self.write_plot_script(self.script_path, fixed)
         return fixed
 
-    def run_script(self) -> tuple[list, str]:
+    def run_script(self) -> tuple:
         """
         Execute the generated plot script.
 
-        On failure, self-heals up to self.max_retries times (#8).
+        On failure, self-heals up to self.max_retries times.
 
         Returns:
             ([(None, (plot_path,))], last_code)
@@ -286,7 +269,7 @@ class PlotCreator:
                     ["python", self.script_path], stderr=subprocess.STDOUT
                 )
                 logger.info("Script succeeded on attempt %d.", attempt)
-                break  # success
+                break
             except subprocess.CalledProcessError as exc:
                 error_text = exc.output.decode(errors="replace")
                 logger.warning(
@@ -301,7 +284,7 @@ class PlotCreator:
                         f"# Last error:\n# {error_text}\n\n"
                         + self.last_code
                     )
-            except Exception as exc:  # #4 — catch unexpected errors
+            except Exception as exc:
                 logger.error("Unexpected error running script: %s", exc)
                 if attempt < self.max_retries:
                     self.last_code = self.attempt_to_fix_script(str(exc))

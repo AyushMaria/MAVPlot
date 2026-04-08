@@ -33,12 +33,10 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff check llm/ app.py --select E,F,W,B --ignore E501
+          ruff check llm/ cli.py app.py --select E,F,W,B --ignore E501
 
       - name: Run tests
         env:
-          # Tests that hit the sandbox don't need a real key.
-          # Tests that call OpenAI are skipped if the key is absent.
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-test-placeholder' }}
           OPENAI_MODEL: gpt-3.5-turbo
         run: |
