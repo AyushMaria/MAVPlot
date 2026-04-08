@@ -5,7 +5,7 @@ Core MAVPlot logic:
   1. Parse a MAVLink .tlog/.bin/.log file into message-type metadata
   2. Embed each message type into a persisted ChromaDB vector store
   3. Use semantic search to find relevant fields for a user query
-  4. Generate a pymavlink + matplotlib script via GPT (LCEL pipeline)
+  4. Generate a plotting script via an LLM (OpenRouter-hosted) using an LCEL pipeline
   5. Execute the script, self-healing up to max_retries times on failure
 """
 
@@ -28,12 +28,20 @@ from pymavlink import mavutil
 logger = logging.getLogger(__name__)
 
 VALID_EXTENSIONS = {".tlog", ".bin", ".log"}
-EMBEDDING_MODEL = "text-embedding-3-small"
+
+# OpenRouter base URL — OpenAI-compatible endpoint
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+# Default embedding model — OpenRouter proxies OpenAI embeddings;
+# falls back to a lightweight local model name that works with any
+# OpenAI-compatible endpoint.
+EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 
 class PlotCreator:
     """
-    Generates Python plotting scripts from MAVLink log files using GPT.
+    Generates Python plotting scripts from MAVLink log files using an LLM
+    served via the OpenRouter API.
 
     Args:
         max_retries (int): Number of self-healing retries if the generated
@@ -51,9 +59,19 @@ class PlotCreator:
         self.db: Optional[Chroma] = None
         self.max_retries: int = max_retries
 
-        self.model: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        api_key: str = os.environ["OPENROUTER_API_KEY"]
+        self.model: str = os.getenv(
+            "OPENROUTER_MODEL", "openai/gpt-3.5-turbo"
+        )
 
-        llm = ChatOpenAI(model_name=self.model, max_tokens=2000, temperature=0)
+        # Both ChatOpenAI instances point at OpenRouter's OpenAI-compatible endpoint.
+        llm = ChatOpenAI(
+            model_name=self.model,
+            max_tokens=2000,
+            temperature=0,
+            openai_api_key=api_key,
+            openai_api_base=OPENROUTER_BASE_URL,
+        )
 
         plot_prompt = PromptTemplate(
             input_variables=["data_types", "history", "human_input", "file", "output_file"],
@@ -83,7 +101,13 @@ class PlotCreator:
                 "Return ONLY the fixed script in a markdown ```python``` block."
             ),
         )
-        fix_llm = ChatOpenAI(model_name=self.model, max_tokens=8000, temperature=0)
+        fix_llm = ChatOpenAI(
+            model_name=self.model,
+            max_tokens=8000,
+            temperature=0,
+            openai_api_key=api_key,
+            openai_api_base=OPENROUTER_BASE_URL,
+        )
         self._fix_chain = fix_prompt | fix_llm | StrOutputParser()
 
     # ------------------------------------------------------------------
@@ -172,12 +196,17 @@ class PlotCreator:
 
     def _create_embeddings(self, message_types: dict) -> None:
         """
-        Embed each message type into a persisted ChromaDB collection.
+        Embed each message type into a persisted ChromaDB collection
+        using OpenRouter's OpenAI-compatible embeddings endpoint.
         """
         texts = [json.dumps({mt: message_types[mt]}) for mt in message_types]
         logger.info("Creating embeddings for %d message types.", len(texts))
 
-        embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+        embeddings = OpenAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            openai_api_key=os.environ["OPENROUTER_API_KEY"],
+            openai_api_base=OPENROUTER_BASE_URL,
+        )
 
         persist_dir = os.path.join(
             os.path.dirname(self.logfile_name), "chroma_db"
@@ -205,7 +234,7 @@ class PlotCreator:
     # ------------------------------------------------------------------
 
     def create_plot(self, human_input: str, data_type_info_text: str) -> str:
-        """Ask GPT to write a plotting script and save it to disk."""
+        """Ask the LLM to write a plotting script and save it to disk."""
         history = (
             f"\n\nLast script generated:\n\n{self.last_code}" if self.last_code else ""
         )
@@ -216,7 +245,7 @@ class PlotCreator:
             "human_input": human_input,
             "output_file": self.plot_path,
         })
-        logger.debug("GPT plot response:\n%s", response)
+        logger.debug("LLM plot response:\n%s", response)
         code = self.extract_code_snippets(response)
         self.write_plot_script(self.script_path, code[0])
         self.last_code = code[0]
@@ -228,7 +257,7 @@ class PlotCreator:
 
     def attempt_to_fix_script(self, error_message: str) -> str:
         """
-        Ask GPT to fix the last failing script.
+        Ask the LLM to fix the last failing script.
 
         Args:
             error_message: The stderr/exception text from the failed run.
@@ -246,10 +275,10 @@ class PlotCreator:
                 "script": script,
             })
         except Exception as exc:
-            logger.error("GPT fix request failed: %s", exc)
+            logger.error("LLM fix request failed: %s", exc)
             return script
 
-        logger.debug("GPT fix response:\n%s", response)
+        logger.debug("LLM fix response:\n%s", response)
         fixed = self.extract_code_snippets(response)[0]
         self.write_plot_script(self.script_path, fixed)
         return fixed

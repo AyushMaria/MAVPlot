@@ -37,7 +37,7 @@ jobs:
 
       - name: Run tests
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-test-placeholder' }}
-          OPENAI_MODEL: gpt-3.5-turbo
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-test-placeholder' }}
+          OPENROUTER_MODEL: openai/gpt-3.5-turbo
         run: |
           pytest tests/ -v --cov=llm --cov-report=term-missing
