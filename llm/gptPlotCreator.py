@@ -5,7 +5,7 @@ Core MAVPlot logic:
   1. Parse a MAVLink .tlog/.bin/.log file into message-type metadata
   2. Embed each message type into a persisted ChromaDB vector store
   3. Use semantic search to find relevant fields for a user query
-  4. Generate a plotting script via an LLM (OpenRouter-hosted) using an LCEL pipeline
+  4. Generate a plotting script via an LLM (OpenRouter / GLM-5.1) using an LCEL pipeline
   5. Execute the script, self-healing up to max_retries times on failure
 """
 
@@ -32,16 +32,17 @@ VALID_EXTENSIONS = {".tlog", ".bin", ".log"}
 # OpenRouter base URL — OpenAI-compatible endpoint
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
-# Default embedding model — OpenRouter proxies OpenAI embeddings;
-# falls back to a lightweight local model name that works with any
-# OpenAI-compatible endpoint.
+# Default model — GLM-5.1 on OpenRouter
+DEFAULT_MODEL = "z-ai/glm-5.1"
+
+# Embedding model — OpenRouter proxies OpenAI embeddings
 EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 
 class PlotCreator:
     """
     Generates Python plotting scripts from MAVLink log files using an LLM
-    served via the OpenRouter API.
+    served via the OpenRouter API (default: Z.ai GLM-5.1).
 
     Args:
         max_retries (int): Number of self-healing retries if the generated
@@ -60,9 +61,7 @@ class PlotCreator:
         self.max_retries: int = max_retries
 
         api_key: str = os.environ["OPENROUTER_API_KEY"]
-        self.model: str = os.getenv(
-            "OPENROUTER_MODEL", "openai/gpt-3.5-turbo"
-        )
+        self.model: str = os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
 
         # Both ChatOpenAI instances point at OpenRouter's OpenAI-compatible endpoint.
         llm = ChatOpenAI(
