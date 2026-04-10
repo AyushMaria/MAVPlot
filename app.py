@@ -1,7 +1,7 @@
 """
 app.py
 
-MAVPlot no longer ships a Gradio UI.
+MAVPose no longer ships a Gradio UI.
 The headless CLI entry point is cli.py.
 
 This file is kept so existing references don't 404, and to provide
@@ -13,7 +13,7 @@ import sys
 
 def main() -> None:
     print(
-        "The Gradio UI has been removed from MAVPlot.\n"
+        "The Gradio UI has been removed from MAVPose.\n"
         "Use the CLI instead:\n\n"
         "  python cli.py <log_file> [--prompt \"Plot altitude over time\"]\n\n"
         "Run `python cli.py --help` for full usage."
