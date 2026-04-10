@@ -1,600 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAVPose — Natural Language Flight Log Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@700,800&display=swap" rel="stylesheet">
+  <style>
+    /* ── Design Tokens ───────────────────────────────────────── */
+    :root, [data-theme="light"] {
+      --color-bg:              #0d0f12;
+      --color-surface:         #13161b;
+      --color-surface-2:       #181c22;
+      --color-surface-offset:  #1e232b;
+      --color-border:          rgba(255,255,255,0.07);
+      --color-divider:         rgba(255,255,255,0.05);
+      --color-text:            #e8eaed;
+      --color-text-muted:      #8b919c;
+      --color-text-faint:      #4a5060;
+      --color-primary:         #3b9eff;
+      --color-primary-hover:   #60b0ff;
+      --color-primary-dim:     rgba(59,158,255,0.12);
+      --color-accent:          #7c6af7;
+      --color-accent-dim:      rgba(124,106,247,0.12);
+      --color-success:         #3ecf8e;
+      --color-warning:         #f59e0b;
+      --color-terminal-bg:     #0a0c0f;
+      --color-terminal-text:   #d4d8de;
+      --color-terminal-green:  #3ecf8e;
+      --color-terminal-blue:   #3b9eff;
+      --color-terminal-yellow: #f59e0b;
+      --color-terminal-comment:#4a5060;
+      --font-display:          'Cabinet Grotesk', 'Inter', sans-serif;
+      --font-body:             'Satoshi', 'Inter', sans-serif;
+      --font-mono:             'JetBrains Mono', 'Fira Code', monospace;
+      --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
+      --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
+      --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
+      --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
+      --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+      --text-2xl:  clamp(2rem,     1.2rem  + 2.5vw,  3.5rem);
+      --text-3xl:  clamp(2.5rem,   1rem    + 4vw,    5rem);
+      --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+      --space-4: 1rem; --space-5: 1.25rem; --space-6: 1.5rem;
+      --space-8: 2rem; --space-10: 2.5rem; --space-12: 3rem;
+      --space-16: 4rem; --space-20: 5rem; --space-24: 6rem;
+      --radius-sm: 0.375rem; --radius-md: 0.5rem;
+      --radius-lg: 0.75rem; --radius-xl: 1rem; --radius-2xl: 1.5rem;
+      --radius-full: 9999px;
+      --shadow-glow-blue: 0 0 40px rgba(59,158,255,0.15), 0 0 80px rgba(59,158,255,0.05);
+      --shadow-glow-purple: 0 0 40px rgba(124,106,247,0.15);
+      --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+      --content-default: 960px; --content-wide: 1200px; --content-narrow: 640px;
+    }
 
-<!doctype html>
-<html lang="en" class="no-js">
-  <head>
-    
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width,initial-scale=1">
-      
-        <meta name="description" content="LLM-powered MAVLink flight log analysis">
-      
-      
-      
-        <link rel="canonical" href="https://ayushmaria.github.io/MAVPose/">
-      
-      
-      
-        <link rel="next" href="api/log_extractor/">
-      
-      
-        
-      
-      
-      <link rel="icon" href="assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
-    
-    
-      
-        <title>MAVPose</title>
-      
-    
-    
-      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
-      
-        
-        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
-      
-      
+    /* ── Reset ───────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5rem; -webkit-font-smoothing: antialiased; }
+    body { font-family: var(--font-body); font-size: var(--text-base); color: var(--color-text); background: var(--color-bg); line-height: 1.6; min-height: 100dvh; overflow-x: hidden; }
+    img, svg { display: block; max-width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; font: inherit; border: none; background: none; }
+    ul { list-style: none; }
+    p { text-wrap: pretty; }
+    h1,h2,h3,h4 { text-wrap: balance; line-height: 1.15; font-family: var(--font-display); }
+    a, button { transition: color var(--transition), background var(--transition), border-color var(--transition), box-shadow var(--transition), opacity var(--transition); }
+    ::selection { background: rgba(59,158,255,0.25); }
+    :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; border-radius: var(--radius-sm); }
 
+    /* ── Utility ─────────────────────────────────────────────── */
+    .container { max-width: var(--content-default); margin-inline: auto; padding-inline: var(--space-6); }
+    .container--wide { max-width: var(--content-wide); margin-inline: auto; padding-inline: var(--space-6); }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 
-    
-    
-      
-    
-    
-      
-        
-        
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
-      
-    
-    
-      <link rel="stylesheet" href="assets/_mkdocstrings.css">
-    
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
-    
-      
+    /* ── Nav ─────────────────────────────────────────────────── */
+    .nav {
+      position: sticky; top: 0; z-index: 100;
+      padding: var(--space-4) 0;
+      border-bottom: 1px solid var(--color-border);
+      background: rgba(13,15,18,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    .nav__inner { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); }
+    .nav__logo { display: flex; align-items: center; gap: var(--space-3); font-family: var(--font-display); font-size: var(--text-lg); font-weight: 800; letter-spacing: -0.02em; }
+    .nav__logo-icon { width: 32px; height: 32px; }
+    .nav__links { display: flex; align-items: center; gap: var(--space-6); }
+    .nav__link { font-size: var(--text-sm); color: var(--color-text-muted); font-weight: 500; }
+    .nav__link:hover { color: var(--color-text); }
+    .nav__cta { display: flex; align-items: center; gap: var(--space-3); }
+    .btn { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-5); border-radius: var(--radius-full); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
+    .btn--primary { background: var(--color-primary); color: #0d0f12; }
+    .btn--primary:hover { background: var(--color-primary-hover); }
+    .btn--ghost { border: 1px solid var(--color-border); color: var(--color-text-muted); }
+    .btn--ghost:hover { border-color: rgba(255,255,255,0.15); color: var(--color-text); }
 
-    
-    
-  </head>
-  
-  
-    
-    
-      
-    
-    
-    
-    
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
-  
-    
-    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
-    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
-    <label class="md-overlay" for="__drawer"></label>
-    <div data-md-component="skip">
-      
-    </div>
-    <div data-md-component="announce">
-      
-    </div>
-    
-    
-      
+    /* ── Hero ────────────────────────────────────────────────── */
+    .hero {
+      padding: clamp(var(--space-16), 10vw, var(--space-24)) 0 clamp(var(--space-12), 8vw, var(--space-20));
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 600px; border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(59,158,255,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero::after {
+      content: '';
+      position: absolute; top: 0; right: -100px;
+      width: 500px; height: 500px; border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(124,106,247,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero__inner { position: relative; z-index: 1; text-align: center; }
+    .hero__badge {
+      display: inline-flex; align-items: center; gap: var(--space-2);
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: var(--radius-full); padding: var(--space-1) var(--space-4);
+      font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: var(--space-6);
+    }
+    .hero__badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); box-shadow: 0 0 6px var(--color-success); animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .hero__title {
+      font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.03em;
+      line-height: 1.05; margin-bottom: var(--space-5);
+    }
+    .hero__title-gradient {
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero__sub {
+      font-size: var(--text-lg); color: var(--color-text-muted); max-width: 56ch;
+      margin: 0 auto var(--space-10); line-height: 1.6;
+    }
+    .hero__actions { display: flex; align-items: center; justify-content: center; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-12); }
+    .btn--hero { padding: var(--space-3) var(--space-8); font-size: var(--text-base); }
+    .hero__badges { display: flex; align-items: center; justify-content: center; gap: var(--space-3); flex-wrap: wrap; }
+    .hero__badge-img { height: 20px; opacity: 0.7; filter: grayscale(0.3); transition: opacity var(--transition), filter var(--transition); }
+    .hero__badge-img:hover { opacity: 1; filter: none; }
 
-<header class="md-header" data-md-component="header">
-  <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="MAVPose" class="md-header__button md-logo" aria-label="MAVPose" data-md-component="logo">
-      
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+    /* ── Terminal ────────────────────────────────────────────── */
+    .terminal-wrap {
+      margin-top: var(--space-12);
+      border-radius: var(--radius-2xl);
+      overflow: hidden;
+      border: 1px solid var(--color-border);
+      box-shadow: var(--shadow-glow-blue), 0 32px 64px rgba(0,0,0,0.5);
+    }
+    .terminal-bar {
+      background: var(--color-surface);
+      padding: var(--space-3) var(--space-4);
+      display: flex; align-items: center; gap: var(--space-3);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .terminal-dots { display: flex; gap: var(--space-2); }
+    .terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .terminal-dot--red   { background: #ff5f57; }
+    .terminal-dot--yellow{ background: #ffbd2e; }
+    .terminal-dot--green { background: #28c941; }
+    .terminal-title { font-size: var(--text-xs); color: var(--color-text-faint); font-family: var(--font-mono); margin-left: auto; margin-right: auto; }
+    .terminal-body {
+      background: var(--color-terminal-bg);
+      padding: var(--space-6);
+      font-family: var(--font-mono); font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+      line-height: 1.8; overflow-x: auto; color: var(--color-terminal-text);
+    }
+    .t-cmd  { color: var(--color-terminal-green); }
+    .t-arg  { color: var(--color-terminal-blue); }
+    .t-dim  { color: var(--color-terminal-comment); }
+    .t-out  { color: var(--color-terminal-text); }
+    .t-head { color: var(--color-terminal-yellow); font-weight: 500; }
+    .t-ok   { color: var(--color-terminal-green); }
+    .t-info { color: var(--color-terminal-blue); }
+    .t-box  { color: var(--color-text-faint); }
 
-    </a>
-    <label class="md-header__button md-icon" for="__drawer">
-      
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
-    </label>
-    <div class="md-header__title" data-md-component="header-title">
-      <div class="md-header__ellipsis">
-        <div class="md-header__topic">
-          <span class="md-ellipsis">
-            MAVPose
-          </span>
-        </div>
-        <div class="md-header__topic" data-md-component="header-topic">
-          <span class="md-ellipsis">
-            
-              Home
-            
-          </span>
-        </div>
-      </div>
-    </div>
-    
-      
-        <form class="md-header__option" data-md-component="palette">
-  
-    
-    
-    
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
-    
-      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
-      </label>
-    
-  
-    
-    
-    
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
-    
-      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
-      </label>
-    
-  
-</form>
-      
-    
-    
-      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
-    
-    
-    
-      
-      
-        <label class="md-header__button md-icon" for="__search">
-          
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
-        </label>
-        <div class="md-search" data-md-component="search" role="dialog">
-  <label class="md-search__overlay" for="__search"></label>
-  <div class="md-search__inner" role="search">
-    <form class="md-search__form" name="search">
-      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
-      <label class="md-search__icon md-icon" for="__search">
-        
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
-        
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
-      </label>
-      <nav class="md-search__options" aria-label="Search">
-        
-        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
-          
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        </button>
+    /* ── Section base ────────────────────────────────────────── */
+    .section { padding: clamp(var(--space-16), 8vw, var(--space-24)) 0; }
+    .section__label {
+      display: inline-block; font-size: var(--text-xs); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--color-primary); margin-bottom: var(--space-4);
+    }
+    .section__title {
+      font-size: var(--text-2xl); font-weight: 800; letter-spacing: -0.03em;
+      margin-bottom: var(--space-4);
+    }
+    .section__sub { font-size: var(--text-base); color: var(--color-text-muted); max-width: 52ch; }
+
+    /* ── Architecture ────────────────────────────────────────── */
+    .arch { background: var(--color-surface); border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
+    .arch__grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-10); align-items: start; }
+    @media (max-width: 768px) { .arch__grid { grid-template-columns: 1fr; } }
+    .arch__phase {
+      background: var(--color-surface-2); border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl); padding: var(--space-6);
+    }
+    .arch__phase-label {
+      font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: var(--space-4);
+    }
+    .arch__phase--1 .arch__phase-label { color: var(--color-primary); }
+    .arch__phase--2 .arch__phase-label { color: var(--color-accent); }
+    .arch__phase-title { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700; margin-bottom: var(--space-4); }
+    .arch__steps { display: flex; flex-direction: column; gap: var(--space-3); }
+    .arch__step {
+      display: flex; align-items: flex-start; gap: var(--space-3);
+      font-size: var(--text-sm); color: var(--color-text-muted);
+    }
+    .arch__step-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+    .arch__step strong { color: var(--color-text); display: block; font-size: var(--text-sm); margin-bottom: 2px; }
+    .arch__arrow {
+      display: flex; align-items: center; justify-content: center;
+      font-size: var(--text-xl); color: var(--color-text-faint);
+    }
+    @media (max-width: 768px) { .arch__arrow { transform: rotate(90deg); } }
+
+    /* ── Features ────────────────────────────────────────────── */
+    .features__grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4);
+      margin-top: var(--space-10);
+    }
+    @media (max-width: 900px) { .features__grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .features__grid { grid-template-columns: 1fr; } }
+    .feature-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl); padding: var(--space-6);
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .feature-card:hover { border-color: rgba(255,255,255,0.12); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+    .feature-card--wide { grid-column: span 2; }
+    @media (max-width: 560px) { .feature-card--wide { grid-column: span 1; } }
+    .feature-card__icon {
+      width: 36px; height: 36px; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; margin-bottom: var(--space-4);
+      background: var(--color-surface-offset);
+    }
+    .feature-card__title { font-family: var(--font-display); font-size: var(--text-base); font-weight: 700; margin-bottom: var(--space-2); }
+    .feature-card__desc { font-size: var(--text-sm); color: var(--color-text-muted); line-height: 1.65; }
+
+    /* ── Stack Table ─────────────────────────────────────────── */
+    .stack { background: var(--color-surface); border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
+    .stack__inner { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-10); align-items: start; }
+    @media (max-width: 768px) { .stack__inner { grid-template-columns: 1fr; } }
+    .stack__table { width: 100%; border-collapse: collapse; }
+    .stack__table th, .stack__table td {
+      padding: var(--space-3) var(--space-4); text-align: left;
+      border-bottom: 1px solid var(--color-divider);
+      font-size: var(--text-sm);
+    }
+    .stack__table th { color: var(--color-text-muted); font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em; }
+    .stack__table td:first-child { color: var(--color-text-muted); width: 35%; }
+    .stack__table td:last-child { color: var(--color-text); font-family: var(--font-mono); font-size: 0.8rem; }
+    .stack__table tr:last-child td { border-bottom: none; }
+
+    /* ── Install ─────────────────────────────────────────────── */
+    .install__tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-6); border-bottom: 1px solid var(--color-border); }
+    .install__tab {
+      padding: var(--space-2) var(--space-4); font-size: var(--text-sm); font-weight: 500;
+      color: var(--color-text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .install__tab--active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+    .install__tab:hover { color: var(--color-text); }
+    .code-block {
+      background: var(--color-terminal-bg); border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl); padding: var(--space-5) var(--space-6);
+      font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.9;
+      overflow-x: auto; position: relative;
+    }
+    .code-block__copy {
+      position: absolute; top: var(--space-3); right: var(--space-3);
+      padding: var(--space-1) var(--space-3); border-radius: var(--radius-md);
+      font-size: var(--text-xs); font-weight: 500; color: var(--color-text-muted);
+      border: 1px solid var(--color-border); background: var(--color-surface);
+    }
+    .code-block__copy:hover { color: var(--color-text); border-color: rgba(255,255,255,0.15); }
+    .code-line { display: block; }
+    .code-comment { color: var(--color-terminal-comment); }
+    .code-cmd { color: var(--color-terminal-green); }
+    .code-str { color: var(--color-terminal-yellow); }
+    .code-kw { color: var(--color-primary); }
+    .install__panels > div { display: none; }
+    .install__panels > div.active { display: block; }
+
+    /* ── Models ──────────────────────────────────────────────── */
+    .models__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin-top: var(--space-8); }
+    @media (max-width: 900px) { .models__grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .models__grid { grid-template-columns: 1fr; } }
+    .model-card {
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl); padding: var(--space-5);
+      transition: border-color var(--transition);
+    }
+    .model-card:hover { border-color: rgba(255,255,255,0.12); }
+    .model-card--default { border-color: rgba(59,158,255,0.3); background: var(--color-primary-dim); }
+    .model-card__tag {
+      display: inline-block; font-size: var(--text-xs); font-weight: 600;
+      padding: 2px var(--space-2); border-radius: var(--radius-sm);
+      margin-bottom: var(--space-3);
+    }
+    .model-card--default .model-card__tag { background: rgba(59,158,255,0.2); color: var(--color-primary); }
+    .model-card__tag--alt { background: var(--color-surface-offset); color: var(--color-text-muted); }
+    .model-card__name { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text); font-weight: 500; margin-bottom: var(--space-2); }
+    .model-card__desc { font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.5; }
+
+    /* ── CTA ─────────────────────────────────────────────────── */
+    .cta {
+      text-align: center;
+      padding: clamp(var(--space-16), 10vw, var(--space-24)) 0;
+      position: relative; overflow: hidden;
+    }
+    .cta::before {
+      content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      width: 600px; height: 400px; border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(124,106,247,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cta__title { font-size: var(--text-2xl); font-weight: 800; letter-spacing: -0.03em; margin-bottom: var(--space-4); }
+    .cta__sub { font-size: var(--text-base); color: var(--color-text-muted); max-width: 44ch; margin: 0 auto var(--space-10); }
+    .cta__actions { display: flex; align-items: center; justify-content: center; gap: var(--space-4); flex-wrap: wrap; }
+
+    /* ── Footer ──────────────────────────────────────────────── */
+    .footer {
+      border-top: 1px solid var(--color-border); padding: var(--space-10) 0;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+      gap: var(--space-4);
+    }
+    .footer__left { font-size: var(--text-sm); color: var(--color-text-muted); }
+    .footer__links { display: flex; gap: var(--space-6); }
+    .footer__link { font-size: var(--text-sm); color: var(--color-text-muted); }
+    .footer__link:hover { color: var(--color-text); }
+
+    /* ── Output Files ────────────────────────────────────────── */
+    .outputs__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); margin-top: var(--space-8); }
+    @media (max-width: 900px) { .outputs__grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .outputs__grid { grid-template-columns: 1fr; } }
+    .output-card {
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl); padding: var(--space-5);
+    }
+    .output-card__file { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-primary); font-weight: 500; margin-bottom: var(--space-2); }
+    .output-card__desc { font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="container">
+    <div class="nav__inner">
+      <a href="#" class="nav__logo">
+        <svg class="nav__logo-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="MAVPose logo">
+          <circle cx="16" cy="16" r="15" stroke="#3b9eff" stroke-width="1.5"/>
+          <circle cx="16" cy="16" r="6" stroke="#7c6af7" stroke-width="1.5"/>
+          <circle cx="16" cy="16" r="2" fill="#3b9eff"/>
+          <line x1="16" y1="1" x2="16" y2="7" stroke="#3b9eff" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="16" y1="25" x2="16" y2="31" stroke="#3b9eff" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+          <line x1="1" y1="16" x2="7" y2="16" stroke="#3b9eff" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+          <line x1="25" y1="16" x2="31" y2="16" stroke="#3b9eff" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+        </svg>
+        MAVPose
+      </a>
+      <nav class="nav__links" aria-label="Primary navigation">
+        <a href="#features" class="nav__link">Features</a>
+        <a href="#architecture" class="nav__link">Architecture</a>
+        <a href="#install" class="nav__link">Install</a>
+        <a href="#models" class="nav__link">Models</a>
+	      <a href="./api-reference.html">API</a>
       </nav>
-      
-    </form>
-    <div class="md-search__output">
-      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
-        <div class="md-search-result" data-md-component="search-result">
-          <div class="md-search-result__meta">
-            Initializing search
-          </div>
-          <ol class="md-search-result__list" role="presentation"></ol>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-      
-    
-    
-      <div class="md-header__source">
-        <a href="https://github.com/AyushMaria/MAVPose" title="Go to repository" class="md-source" data-md-component="source">
-  <div class="md-source__icon md-icon">
-    
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
-  </div>
-  <div class="md-source__repository">
-    AyushMaria/MAVPose
-  </div>
-</a>
-      </div>
-    
-  </nav>
-  
-</header>
-    
-    <div class="md-container" data-md-component="container">
-      
-      
-        
-          
-            
-<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
-  <div class="md-grid">
-    <ul class="md-tabs__list">
-      
-        
-  
-  
-  
-    
-  
-  
-    <li class="md-tabs__item md-tabs__item--active">
-      <a href="." class="md-tabs__link">
-        
-  
-  
-    
-  
-  Home
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="api/log_extractor/" class="md-tabs__link">
-          
-  
-  
-  API Reference
-
+      <div class="nav__cta">
+        <a href="https://pypi.org/project/mavpose/" target="_blank" rel="noopener noreferrer" class="btn btn--ghost">PyPI</a>
+        <a href="https://github.com/AyushMaria/MAVPose" target="_blank" rel="noopener noreferrer" class="btn btn--primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12Z"/></svg>
+          GitHub
         </a>
-      </li>
-    
-  
-
-      
-    </ul>
-  </div>
-</nav>
-          
-        
-      
-      <main class="md-main" data-md-component="main">
-        <div class="md-main__inner md-grid">
-          
-            
-              
-              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
-                <div class="md-sidebar__scrollwrap">
-                  <div class="md-sidebar__inner">
-                    
-
-
-  
-
-
-<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
-  <label class="md-nav__title" for="__drawer">
-    <a href="." title="MAVPose" class="md-nav__button md-logo" aria-label="MAVPose" data-md-component="logo">
-      
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
-
-    </a>
-    MAVPose
-  </label>
-  
-    <div class="md-nav__source">
-      <a href="https://github.com/AyushMaria/MAVPose" title="Go to repository" class="md-source" data-md-component="source">
-  <div class="md-source__icon md-icon">
-    
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
-  </div>
-  <div class="md-source__repository">
-    AyushMaria/MAVPose
-  </div>
-</a>
+      </div>
     </div>
-  
-  <ul class="md-nav__list" data-md-scrollfix>
-    
-      
-      
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-      <a href="." class="md-nav__link md-nav__link--active">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-    
-    
-      
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
-        
-          
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    API Reference
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    API Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="api/log_extractor/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    LogExtractor
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="api/plot_creator/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    PlotCreator
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="api/file_validator/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    FileValidator
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="api/safe_executor/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    SafeExecutor
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-  </ul>
+  </div>
 </nav>
-                  </div>
-                </div>
-              </div>
-            
-            
-              
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
-                <div class="md-sidebar__scrollwrap">
-                  <div class="md-sidebar__inner">
-                    
 
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-</nav>
-                  </div>
-                </div>
-              </div>
-            
-          
-          
-            <div class="md-content" data-md-component="content">
-              
-              <article class="md-content__inner md-typeset">
-                
-                  
+<!-- HERO -->
+<header class="hero">
+  <div class="container">
+    <div class="hero__inner">
+      <div class="hero__badge">
+        <span class="hero__badge-dot"></span>
+        Now on PyPI — <code style="font-family:var(--font-mono);font-size:inherit">pip install mavpose</code>
+      </div>
 
+      <h1 class="hero__title">
+        Ask your flight log<br>
+        <span class="hero__title-gradient">anything, in plain English.</span>
+      </h1>
 
-  
-  
+      <p class="hero__sub">
+        MAVPose turns a natural language prompt into a matplotlib plot of your MAVLink telemetry.
+        No pymavlink knowledge required. Like the Log Pose — it locks onto your data and charts the course.
+      </p>
 
+      <div class="hero__actions">
+        <a href="#install" class="btn btn--primary btn--hero">
+          Get Started
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+        <a href="https://github.com/AyushMaria/MAVPose" target="_blank" rel="noopener noreferrer" class="btn btn--ghost btn--hero">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12Z"/></svg>
+          View on GitHub
+        </a>
+      </div>
 
-  <h1>Home</h1>
+      <div class="hero__badges">
+        <img src="https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white&style=flat-square" alt="Python 3.10+" class="hero__badge-img" width="112" height="20" loading="lazy">
+        <img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="MIT License" class="hero__badge-img" width="78" height="20" loading="lazy">
+        <img src="https://github.com/AyushMaria/MAVPose/actions/workflows/ci.yml/badge.svg?style=flat-square" alt="CI Status" class="hero__badge-img" width="90" height="20" loading="lazy">
+        <img src="https://badge.fury.io/py/mavpose.svg?style=flat-square" alt="PyPI version" class="hero__badge-img" width="100" height="20" loading="lazy">
+      </div>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-                
-              </article>
-            </div>
-          
-          
-<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+      <!-- Terminal Demo -->
+      <div class="terminal-wrap">
+        <div class="terminal-bar">
+          <div class="terminal-dots">
+            <div class="terminal-dot terminal-dot--red"></div>
+            <div class="terminal-dot terminal-dot--yellow"></div>
+            <div class="terminal-dot terminal-dot--green"></div>
+          </div>
+          <span class="terminal-title">mavpose — flight.tlog</span>
         </div>
-        
-      </main>
-      
-        <footer class="md-footer">
-  
-  <div class="md-footer-meta md-typeset">
-    <div class="md-footer-meta__inner md-grid">
-      <div class="md-copyright">
-  
-  
-    Made with
-    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
-      Material for MkDocs
-    </a>
-  
-</div>
-      
+        <div class="terminal-body" aria-label="Terminal demo output">
+<span class="code-line"><span class="t-cmd">$</span> <span class="t-arg">mavpose flight.tlog --prompt "Plot altitude over time"</span></span>
+<span class="code-line"> </span>
+<span class="code-line"><span class="t-dim">📂 Parsing log schema: flight.tlog</span></span>
+<span class="code-line"><span class="t-ok">✅ Schema indexed.</span></span>
+<span class="code-line"> </span>
+<span class="code-line"><span class="t-info">🔍 Finding relevant message types for: 'Plot altitude over time'</span></span>
+<span class="code-line">   <span class="t-dim">→ ['GLOBAL_POSITION_INT', 'VFR_HUD']</span></span>
+<span class="code-line"> </span>
+<span class="code-line"><span class="t-info">🗃️  Extracting telemetry to Parquet...</span></span>
+<span class="code-line"><span class="t-box">┌──────────────────────────────────────────────────────────┐</span></span>
+<span class="code-line"><span class="t-box">│</span>  <span class="t-head">🗃️  Extracted Parquet schema</span>                              <span class="t-box">│</span></span>
+<span class="code-line"><span class="t-box">├──────────────────────────────────────────────────────────┤</span></span>
+<span class="code-line"><span class="t-box">│</span>  <span class="t-info">[GLOBAL_POSITION_INT]</span>  <span class="t-dim">1842 rows</span>                        <span class="t-box">│</span></span>
+<span class="code-line"><span class="t-box">│</span>      <span class="t-dim">time_s: float64  [0.0 … 312.4]</span>                       <span class="t-box">│</span></span>
+<span class="code-line"><span class="t-box">│</span>      <span class="t-dim">alt:    float64  [487320 … 512100]</span>                    <span class="t-box">│</span></span>
+<span class="code-line"><span class="t-box">│</span>  <span class="t-info">[VFR_HUD]</span>  <span class="t-dim">1842 rows</span>                                    <span class="t-box">│</span></span>
+<span class="code-line"><span class="t-box">│</span>      <span class="t-dim">time_s: float64  [0.0 … 312.4]</span>                       <span class="t-box">│</span></span>
+<span class="code-line"><span class="t-box">│</span>      <span class="t-dim">alt:    float64  [476.1 … 501.3]</span>                      <span class="t-box">│</span></span>
+<span class="code-line"><span class="t-box">└──────────────────────────────────────────────────────────┘</span></span>
+<span class="code-line"> </span>
+<span class="code-line"><span class="t-dim">✍️  Generating plot script with z-ai/glm-5.1...</span></span>
+<span class="code-line"><span class="t-dim">⚙️  Running script...</span></span>
+<span class="code-line"><span class="t-ok">✅ Plot saved to: ./target/plot.png</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ARCHITECTURE -->
+<section class="section arch" id="architecture">
+  <div class="container">
+    <p class="section__label">How it works</p>
+    <h2 class="section__title">Two-phase pipeline</h2>
+    <p class="section__sub">The LLM never sees raw binary data. Phase 1 extracts clean, typed Parquet with exact column names and value ranges. Phase 2 hands that schema to the LLM — writing <code style="font-family:var(--font-mono);font-size:0.9em;color:var(--color-primary)">pd.read_parquet()</code> against a known schema is trivially reliable.</p>
+
+    <div class="arch__grid" style="margin-top:var(--space-10)">
+      <div class="arch__phase arch__phase--1">
+        <p class="arch__phase-label">Phase 1 — Extraction (no LLM)</p>
+        <h3 class="arch__phase-title">Parent Process</h3>
+        <div class="arch__steps">
+          <div class="arch__step"><span class="arch__step-icon">🔍</span><div><strong>schema_only()</strong>pymavlink fast scan → field map, message counts</div></div>
+          <div class="arch__step"><span class="arch__step-icon">🧠</span><div><strong>ChromaDB embeddings</strong>Semantic search — no full extraction yet</div></div>
+          <div class="arch__step"><span class="arch__step-icon">🗃️</span><div><strong>extract_all()</strong>Per-msg-type DataFrames, <code style="font-family:var(--font-mono);font-size:0.85em">time_s</code> column, cast numerics</div></div>
+          <div class="arch__step"><span class="arch__step-icon">📦</span><div><strong>export_parquet()</strong>Clean Parquet + dtype + min/max range metadata</div></div>
+        </div>
+      </div>
+
+      <div class="arch__phase arch__phase--2">
+        <p class="arch__phase-label">Phase 2 — LLM Plot Generation</p>
+        <h3 class="arch__phase-title">LLM Subprocess</h3>
+        <div class="arch__steps">
+          <div class="arch__step"><span class="arch__step-icon">📋</span><div><strong>LLM receives schema</strong>Parquet path, column names, dtypes, min/max ranges</div></div>
+          <div class="arch__step"><span class="arch__step-icon">✍️</span><div><strong>Writes pandas + matplotlib</strong><code style="font-family:var(--font-mono);font-size:0.85em">pd.read_parquet()</code> against a known schema</div></div>
+          <div class="arch__step"><span class="arch__step-icon">🛡️</span><div><strong>Sandboxed execution</strong>Subprocess with import denylist + 30s timeout</div></div>
+          <div class="arch__step"><span class="arch__step-icon">🔄</span><div><strong>Self-healing</strong>On failure: rewrites with full traceback up to N times</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="container">
+    <p class="section__label">Capabilities</p>
+    <h2 class="section__title">Everything MAVPose handles for you</h2>
+    <p class="section__sub">From semantic field search to sandboxed execution — focus on the question, not the telemetry plumbing.</p>
+    <div class="features__grid">
+      <div class="feature-card">
+        <div class="feature-card__icon">🗣️</div>
+        <h3 class="feature-card__title">Plain-English Queries</h3>
+        <p class="feature-card__desc">Describe any flight event. MAVPose resolves the right MAVLink message types automatically via ChromaDB vector embeddings.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">📦</div>
+        <h3 class="feature-card__title">Clean Parquet Handoff</h3>
+        <p class="feature-card__desc">The LLM receives a typed, time-aligned Parquet with exact column names, dtypes, and value ranges. No binary guesswork.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">🧠</div>
+        <h3 class="feature-card__title">Semantic Field Search</h3>
+        <p class="feature-card__desc">ChromaDB vector store persists to disk. Re-running on the same log skips re-embedding completely.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">🔄</div>
+        <h3 class="feature-card__title">Self-Healing Scripts</h3>
+        <p class="feature-card__desc">LLM debugs and rewrites failing scripts up to N times. The fix prompt includes the full schema and traceback.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">🛡️</div>
+        <h3 class="feature-card__title">Sandboxed Execution</h3>
+        <p class="feature-card__desc">Generated code runs in an isolated subprocess with a blocked-import denylist and a 30-second timeout.</p>
+      </div>
+      <div class="feature-card feature-card--wide">
+        <div class="feature-card__icon">🔁</div>
+        <h3 class="feature-card__title">Interactive REPL Mode</h3>
+        <p class="feature-card__desc">Omit <code style="font-family:var(--font-mono);font-size:0.85em;color:var(--color-primary)">--prompt</code> to enter a live loop. Query the same log repeatedly without re-parsing. Swap the LLM with a single <code style="font-family:var(--font-mono);font-size:0.85em;color:var(--color-primary)">.env</code> change via OpenRouter.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- OUTPUT FILES -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <p class="section__label">Output files</p>
+    <h2 class="section__title">What gets generated</h2>
+    <div class="outputs__grid">
+      <div class="output-card"><div class="output-card__file">telemetry.parquet</div><div class="output-card__desc">Extracted, time-aligned telemetry for the relevant message types</div></div>
+      <div class="output-card"><div class="output-card__file">plot.py</div><div class="output-card__desc">The LLM-generated pandas + matplotlib script</div></div>
+      <div class="output-card"><div class="output-card__file">plot.png</div><div class="output-card__desc">The final rendered plot at 400 dpi</div></div>
+      <div class="output-card"><div class="output-card__file">chroma_db/</div><div class="output-card__desc">Persisted ChromaDB vector store (git-ignored, skips re-embedding)</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section class="section stack" id="stack">
+  <div class="container">
+    <div class="stack__inner">
+      <div>
+        <p class="section__label">Tech stack</p>
+        <h2 class="section__title">Built on proven tools</h2>
+        <p class="section__sub" style="margin-top:var(--space-4)">Every layer is chosen to minimise hallucinations and maximise reliable code generation.</p>
+      </div>
+      <table class="stack__table" aria-label="Technology stack">
+        <thead>
+          <tr><th>Layer</th><th>Library / Service</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>LLM</td><td>OpenRouter → z-ai/glm-5.1</td></tr>
+          <tr><td>Embeddings</td><td>openai/text-embedding-3-small</td></tr>
+          <tr><td>LLM framework</td><td>LangChain LCEL</td></tr>
+          <tr><td>Vector store</td><td>ChromaDB ≥ 0.5 (persisted)</td></tr>
+          <tr><td>Extraction</td><td>pandas ≥ 2.0 + pyarrow ≥ 14.0</td></tr>
+          <tr><td>Drone logs</td><td>pymavlink 2.4.37</td></tr>
+          <tr><td>Plotting</td><td>matplotlib 3.7.1</td></tr>
+          <tr><td>Sandbox</td><td>subprocess + import denylist</td></tr>
+          <tr><td>Lint / CI</td><td>ruff + pytest + GitHub Actions</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section class="section" id="install">
+  <div class="container">
+    <p class="section__label">Installation</p>
+    <h2 class="section__title">Up and running in minutes</h2>
+    <p class="section__sub">Python 3.10+ and an <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" style="color:var(--color-primary)">OpenRouter API key</a> are all you need.</p>
+
+    <div style="margin-top:var(--space-8); max-width: 640px;">
+      <div class="install__tabs" role="tablist">
+        <button class="install__tab install__tab--active" role="tab" aria-selected="true" onclick="switchTab('pip')">pip (library)</button>
+        <button class="install__tab" role="tab" aria-selected="false" onclick="switchTab('git')">Clone from GitHub</button>
+      </div>
+
+      <div class="install__panels">
+        <div id="panel-pip" class="active">
+          <div class="code-block">
+            <button class="code-block__copy" onclick="copyCode('pip-code')">Copy</button>
+            <pre id="pip-code" style="margin:0;white-space:pre-wrap"><span class="code-comment"># Install the package</span>
+<span class="code-cmd">pip install mavpose</span>
+
+<span class="code-comment"># Set your API key</span>
+<span class="code-cmd">set OPENROUTER_API_KEY=your-key-here</span>  <span class="code-comment"># Windows</span>
+<span class="code-cmd">export OPENROUTER_API_KEY=your-key-here</span>  <span class="code-comment"># macOS / Linux</span>
+
+<span class="code-comment"># Run it</span>
+<span class="code-cmd">mavpose flight.tlog --prompt "Plot altitude over time"</span></pre>
+          </div>
+        </div>
+        <div id="panel-git" style="display:none">
+          <div class="code-block">
+            <button class="code-block__copy" onclick="copyCode('git-code')">Copy</button>
+            <pre id="git-code" style="margin:0;white-space:pre-wrap"><span class="code-comment"># 1. Clone</span>
+<span class="code-cmd">git clone https://github.com/AyushMaria/MAVPose.git && cd MAVPose</span>
+
+<span class="code-comment"># 2. Virtual environment</span>
+<span class="code-cmd">python -m venv venv && venv\Scripts ctivate</span>
+
+<span class="code-comment"># 3. Install dependencies</span>
+<span class="code-cmd">pip install -r requirements.txt</span>
+
+<span class="code-comment"># 4. Configure</span>
+<span class="code-cmd">cp template.env .env</span>
+<span class="code-comment"># Edit .env — add OPENROUTER_API_KEY=your-key-here</span>
+
+<span class="code-comment"># 5. Run</span>
+<span class="code-cmd">python cli.py flight.tlog --prompt "Plot altitude over time"</span></pre>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:var(--space-6);padding:var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg)">
+        <p style="font-size:var(--text-sm);color:var(--color-text-muted)"><strong style="color:var(--color-warning)">⚠️ Note:</strong> Never commit <code style="font-family:var(--font-mono);font-size:0.9em">.env</code> — it is already in <code style="font-family:var(--font-mono);font-size:0.9em">.gitignore</code>. Need a sample log?
+        <a href="https://drive.google.com/file/d/1BKv-NbSvYQz9XqqmyOyOhe3o4PAFDyZa/view?usp=sharing" target="_blank" rel="noopener noreferrer" style="color:var(--color-primary)">Download here →</a></p>
+      </div>
+
+      <div style="margin-top:var(--space-6)">
+        <p style="font-size:var(--text-sm);color:var(--color-text-muted);margin-bottom:var(--space-3)"><strong style="color:var(--color-text)">CLI flags</strong></p>
+        <div class="code-block" style="font-size:var(--text-xs)">
+          <pre style="margin:0;white-space:pre-wrap"><span class="code-cmd">mavpose</span> <span class="t-arg">log_file</span> [options]
+
+  <span class="t-arg">log_file</span>            Path to .tlog / .bin / .log
+  <span class="t-dim">-p, --prompt TEXT</span>   Plot request (omit for interactive REPL)
+  <span class="t-dim">-r, --retries N</span>     Max self-healing retries (default: 3)
+  <span class="t-dim">-v, --verbose</span>       Enable debug logging</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MODELS -->
+<section class="section" id="models" style="padding-top:0">
+  <div class="container">
+    <p class="section__label">Model support</p>
+    <h2 class="section__title">Swap models with one line</h2>
+    <p class="section__sub">MAVPose routes through <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" style="color:var(--color-primary)">OpenRouter</a> — any model on the platform works. Set <code style="font-family:var(--font-mono);font-size:0.9em;color:var(--color-primary)">OPENROUTER_MODEL</code> in your <code style="font-family:var(--font-mono);font-size:0.9em">.env</code>.</p>
+    <div class="models__grid">
+      <div class="model-card model-card--default">
+        <span class="model-card__tag">Default</span>
+        <p class="model-card__name">z-ai/glm-5.1</p>
+        <p class="model-card__desc">Long-horizon agentic coding. Best for complex multi-step plots.</p>
+      </div>
+      <div class="model-card">
+        <span class="model-card__tag model-card__tag--alt">Z.ai</span>
+        <p class="model-card__name">z-ai/glm-5</p>
+        <p class="model-card__desc">Flagship model for complex systems.</p>
+      </div>
+      <div class="model-card">
+        <span class="model-card__tag model-card__tag--alt">Z.ai</span>
+        <p class="model-card__name">z-ai/glm-4.5</p>
+        <p class="model-card__desc">MoE, 355B params, switchable reasoning.</p>
+      </div>
+      <div class="model-card">
+        <span class="model-card__tag model-card__tag--alt">OpenAI</span>
+        <p class="model-card__name">openai/gpt-4o</p>
+        <p class="model-card__desc">Reliable fallback for general-purpose plotting.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="container">
+    <h2 class="cta__title">Start analysing your flight data today</h2>
+    <p class="cta__sub">One command. Natural language. A plot in seconds.</p>
+    <div class="cta__actions">
+      <a href="https://pypi.org/project/mavpose/" target="_blank" rel="noopener noreferrer" class="btn btn--primary btn--hero">
+        pip install mavpose
+      </a>
+      <a href="https://github.com/AyushMaria/MAVPose" target="_blank" rel="noopener noreferrer" class="btn btn--ghost btn--hero">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12Z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer">
+      <p class="footer__left">© 2025 MAVPose · MIT License · Inspired by the Log Pose from One Piece</p>
+      <nav class="footer__links" aria-label="Footer navigation">
+        <a href="https://github.com/AyushMaria/MAVPose" target="_blank" rel="noopener noreferrer" class="footer__link">GitHub</a>
+        <a href="https://pypi.org/project/mavpose/" target="_blank" rel="noopener noreferrer" class="footer__link">PyPI</a>
+        <a href="https://github.com/AyushMaria/MAVPose/blob/master/LICENSE" target="_blank" rel="noopener noreferrer" class="footer__link">License</a>
+        <a href="https://drive.google.com/file/d/1BKv-NbSvYQz9XqqmyOyOhe3o4PAFDyZa/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="footer__link">Sample Log</a>
+      </nav>
     </div>
   </div>
 </footer>
-      
-    </div>
-    <div class="md-dialog" data-md-component="dialog">
-      <div class="md-dialog__inner md-typeset"></div>
-    </div>
-    
-    
-    
-      
-      
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.tabs", "navigation.instant", "content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
-    
-    
-      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
-      
-    
-  </body>
+
+<script>
+  function switchTab(tab) {
+    document.querySelectorAll('.install__tab').forEach((t,i) => {
+      t.classList.toggle('install__tab--active', (i===0&&tab==='pip')||(i===1&&tab==='git'));
+      t.setAttribute('aria-selected', (i===0&&tab==='pip')||(i===1&&tab==='git'));
+    });
+    document.getElementById('panel-pip').style.display = tab==='pip' ? 'block' : 'none';
+    document.getElementById('panel-git').style.display = tab==='git' ? 'block' : 'none';
+  }
+  function copyCode(id) {
+    const el = document.getElementById(id);
+    const text = el.innerText.replace(/^[#$]\s*/gm, '').trim();
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = el.closest('.code-block').querySelector('.code-block__copy');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  }
+</script>
+</body>
 </html>

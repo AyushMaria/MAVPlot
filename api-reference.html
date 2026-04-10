@@ -1,0 +1,2138 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAVPose — API Reference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── Design Tokens ─────────────────────────────────────────────── */
+    :root {
+      --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
+      --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
+      --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
+      --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
+      --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+      --text-2xl:  clamp(2rem,     1.2rem  + 2.5vw,  3.5rem);
+
+      --space-1: 0.25rem; --space-2: 0.5rem;  --space-3: 0.75rem;
+      --space-4: 1rem;    --space-5: 1.25rem; --space-6: 1.5rem;
+      --space-8: 2rem;    --space-10: 2.5rem; --space-12: 3rem;
+      --space-16: 4rem;   --space-20: 5rem;   --space-24: 6rem;
+
+      --radius-sm: 0.375rem; --radius-md: 0.5rem;
+      --radius-lg: 0.75rem;  --radius-xl: 1rem;
+      --radius-full: 9999px;
+
+      --transition-interactive: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+
+      --font-body: 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+      --content-narrow: 640px;
+      --content-default: 960px;
+      --content-wide: 1280px;
+
+      /* Sidebar width */
+      --sidebar-w: 260px;
+    }
+
+    /* ─── Light Mode ─────────────────────────────────────────────────── */
+    :root, [data-theme="light"] {
+      --color-bg:              #f7f6f2;
+      --color-surface:         #f9f8f5;
+      --color-surface-2:       #fbfbf9;
+      --color-surface-offset:  #f0ede8;
+      --color-surface-dynamic: #e6e4df;
+      --color-divider:         #dcd9d5;
+      --color-border:          #d4d1ca;
+      --color-text:            #28251d;
+      --color-text-muted:      #6b6a66;
+      --color-text-faint:      #b0afa9;
+      --color-text-inverse:    #f9f8f4;
+      --color-primary:         #01696f;
+      --color-primary-hover:   #0c4e54;
+      --color-primary-active:  #0f3638;
+      --color-primary-highlight: #d0e4e0;
+      --color-warning:         #964219;
+      --color-error:           #a12c7b;
+      --color-success:         #437a22;
+      --color-code-bg:         #1e1c18;
+      --color-code-text:       #e8e6e0;
+      --color-tag-get:         #437a22;
+      --color-tag-get-bg:      #d4dfcc;
+      --color-tag-param:       #006494;
+      --color-tag-param-bg:    #c6d8e4;
+      --color-tag-raises:      #a12c7b;
+      --color-tag-raises-bg:   #e0ced7;
+      --color-tag-returns:     #01696f;
+      --color-tag-returns-bg:  #cedcd8;
+      --shadow-sm: 0 1px 2px oklch(0.2 0.01 80 / 0.06);
+      --shadow-md: 0 4px 12px oklch(0.2 0.01 80 / 0.08);
+      --shadow-lg: 0 12px 32px oklch(0.2 0.01 80 / 0.12);
+    }
+
+    /* ─── Dark Mode ──────────────────────────────────────────────────── */
+    [data-theme="dark"] {
+      --color-bg:              #0f0e0c;
+      --color-surface:         #161512;
+      --color-surface-2:       #1b1a17;
+      --color-surface-offset:  #1d1c19;
+      --color-surface-dynamic: #242320;
+      --color-divider:         #262420;
+      --color-border:          #302e2a;
+      --color-text:            #e2e0da;
+      --color-text-muted:      #8a8880;
+      --color-text-faint:      #4a4945;
+      --color-text-inverse:    #1b1a17;
+      --color-primary:         #4fa8b0;
+      --color-primary-hover:   #2d8f98;
+      --color-primary-active:  #1a6e75;
+      --color-primary-highlight: #1e3535;
+      --color-warning:         #bb653b;
+      --color-error:           #d163a7;
+      --color-success:         #6daa45;
+      --color-code-bg:         #0a0908;
+      --color-code-text:       #d8d5ce;
+      --color-tag-get:         #6daa45;
+      --color-tag-get-bg:      #1e2e18;
+      --color-tag-param:       #5591c7;
+      --color-tag-param-bg:    #182030;
+      --color-tag-raises:      #d163a7;
+      --color-tag-raises-bg:   #2a1520;
+      --color-tag-returns:     #4fa8b0;
+      --color-tag-returns-bg:  #102425;
+      --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
+      --shadow-md: 0 4px 12px oklch(0 0 0 / 0.4);
+      --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) {
+        --color-bg: #0f0e0c; --color-surface: #161512;
+        --color-surface-2: #1b1a17; --color-surface-offset: #1d1c19;
+        --color-surface-dynamic: #242320; --color-divider: #262420;
+        --color-border: #302e2a; --color-text: #e2e0da;
+        --color-text-muted: #8a8880; --color-text-faint: #4a4945;
+        --color-text-inverse: #1b1a17; --color-primary: #4fa8b0;
+        --color-primary-hover: #2d8f98; --color-primary-active: #1a6e75;
+        --color-primary-highlight: #1e3535; --color-warning: #bb653b;
+        --color-error: #d163a7; --color-success: #6daa45;
+        --color-code-bg: #0a0908; --color-code-text: #d8d5ce;
+        --color-tag-get: #6daa45; --color-tag-get-bg: #1e2e18;
+        --color-tag-param: #5591c7; --color-tag-param-bg: #182030;
+        --color-tag-raises: #d163a7; --color-tag-raises-bg: #2a1520;
+        --color-tag-returns: #4fa8b0; --color-tag-returns-bg: #102425;
+        --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
+        --shadow-md: 0 4px 12px oklch(0 0 0 / 0.4);
+        --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);
+      }
+    }
+
+    /* ─── Base Reset ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      scroll-behavior: smooth;
+      scroll-padding-top: var(--space-20);
+    }
+    body {
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      color: var(--color-text);
+      background: var(--color-bg);
+      min-height: 100dvh;
+      line-height: 1.65;
+    }
+    img, picture, video, canvas, svg { display: block; max-width: 100%; }
+    input, button, textarea, select { font: inherit; color: inherit; }
+    h1, h2, h3, h4 { text-wrap: balance; line-height: 1.2; }
+    p, li { text-wrap: pretty; }
+    button { cursor: pointer; background: none; border: none; }
+    ::selection { background: oklch(from var(--color-primary) l c h / 0.22); color: var(--color-text); }
+    :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; border-radius: var(--radius-sm); }
+    a, button, [role="button"] {
+      transition: color var(--transition-interactive),
+                  background var(--transition-interactive),
+                  border-color var(--transition-interactive),
+                  box-shadow var(--transition-interactive),
+                  opacity var(--transition-interactive);
+    }
+
+    /* ─── Layout Shell ───────────────────────────────────────────────── */
+    .shell {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      grid-template-rows: 56px 1fr;
+      min-height: 100dvh;
+    }
+
+    /* ─── Topbar ─────────────────────────────────────────────────────── */
+    .topbar {
+      grid-column: 1 / -1;
+      height: 56px;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--space-6);
+      gap: var(--space-4);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .topbar-logo {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      text-decoration: none;
+      color: var(--color-text);
+      font-weight: 600;
+      font-size: var(--text-base);
+      letter-spacing: -0.01em;
+      flex-shrink: 0;
+    }
+    .topbar-logo svg { color: var(--color-primary); }
+    .topbar-logo .logo-name { color: var(--color-text); }
+    .topbar-logo .logo-page {
+      color: var(--color-text-muted);
+      font-weight: 400;
+      font-size: var(--text-sm);
+    }
+    .topbar-logo .logo-sep { color: var(--color-text-faint); margin: 0 var(--space-1); }
+
+    .topbar-spacer { flex: 1; }
+
+    .topbar-nav {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+    .topbar-nav a {
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      text-decoration: none;
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-md);
+    }
+    .topbar-nav a:hover { color: var(--color-text); background: var(--color-surface-offset); }
+    .topbar-nav a.active { color: var(--color-primary); background: var(--color-primary-highlight); }
+
+    .theme-toggle {
+      width: 36px; height: 36px;
+      border-radius: var(--radius-md);
+      color: var(--color-text-muted);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .theme-toggle:hover { background: var(--color-surface-offset); color: var(--color-text); }
+
+    .topbar-gh {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-sm); font-weight: 500;
+      color: var(--color-text-muted);
+      text-decoration: none;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+    }
+    .topbar-gh:hover { color: var(--color-text); border-color: var(--color-text-muted); }
+
+    /* ─── Sidebar ────────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      height: calc(100dvh - 56px);
+      position: sticky;
+      top: 56px;
+      overflow-y: auto;
+      background: var(--color-surface);
+      border-right: 1px solid var(--color-border);
+      padding: var(--space-6) 0 var(--space-12);
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-border) transparent;
+    }
+
+    .sidebar-section { margin-bottom: var(--space-6); }
+    .sidebar-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-faint);
+      padding: 0 var(--space-5) var(--space-2);
+    }
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      text-decoration: none;
+      padding: var(--space-2) var(--space-5);
+      border-radius: 0;
+      position: relative;
+      line-height: 1.4;
+    }
+    .sidebar-link:hover { color: var(--color-text); background: var(--color-surface-offset); }
+    .sidebar-link.active {
+      color: var(--color-primary);
+      background: var(--color-primary-highlight);
+    }
+    .sidebar-link.active::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 2px;
+      background: var(--color-primary);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+    .sidebar-link .badge {
+      margin-left: auto;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: var(--radius-full);
+      background: var(--color-surface-dynamic);
+      color: var(--color-text-faint);
+      letter-spacing: 0.03em;
+    }
+    .sidebar-divider {
+      height: 1px;
+      background: var(--color-divider);
+      margin: var(--space-3) var(--space-5);
+    }
+
+    /* ─── Main Content ───────────────────────────────────────────────── */
+    .main {
+      overflow-y: auto;
+      padding: var(--space-10) var(--space-10) var(--space-24);
+      max-width: 860px;
+    }
+
+    /* ─── Page Header ────────────────────────────────────────────────── */
+    .page-header {
+      margin-bottom: var(--space-12);
+      padding-bottom: var(--space-8);
+      border-bottom: 1px solid var(--color-divider);
+    }
+    .page-header-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--color-primary);
+      background: var(--color-primary-highlight);
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-full);
+      margin-bottom: var(--space-4);
+    }
+    .page-header h1 {
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--color-text);
+      margin-bottom: var(--space-3);
+    }
+    .page-header p {
+      font-size: var(--text-base);
+      color: var(--color-text-muted);
+      max-width: 60ch;
+      line-height: 1.7;
+    }
+    .page-header-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      margin-top: var(--space-5);
+      flex-wrap: wrap;
+    }
+    .meta-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      font-family: var(--font-mono);
+      color: var(--color-text-muted);
+      background: var(--color-surface-offset);
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+    }
+
+    /* ─── Section Headings ───────────────────────────────────────────── */
+    .api-section {
+      margin-bottom: var(--space-16);
+      scroll-margin-top: var(--space-20);
+    }
+    .section-title {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-text);
+      margin-bottom: var(--space-2);
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .section-title .section-anchor {
+      color: var(--color-text-faint);
+      text-decoration: none;
+      font-size: var(--text-base);
+      opacity: 0;
+      transition: opacity var(--transition-interactive);
+    }
+    .section-title:hover .section-anchor { opacity: 1; }
+    .section-desc {
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      margin-bottom: var(--space-6);
+      max-width: 65ch;
+      line-height: 1.7;
+    }
+
+    /* ─── Method Cards ───────────────────────────────────────────────── */
+    .method-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      margin-bottom: var(--space-6);
+      box-shadow: var(--shadow-sm);
+    }
+    .method-card + .method-card { }
+
+    .method-header {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-4);
+      padding: var(--space-5) var(--space-6);
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 1px solid transparent;
+      transition: background var(--transition-interactive), border-color var(--transition-interactive);
+    }
+    .method-header:hover { background: var(--color-surface-offset); }
+    .method-card.open .method-header {
+      border-bottom-color: var(--color-divider);
+      background: var(--color-surface-offset);
+    }
+
+    .method-badge {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      margin-top: 2px;
+    }
+    .badge-method { background: var(--color-tag-returns-bg); color: var(--color-tag-returns); }
+    .badge-static  { background: var(--color-tag-param-bg);   color: var(--color-tag-param); }
+    .badge-init    { background: var(--color-tag-raises-bg);  color: var(--color-tag-raises); }
+    .badge-prop    { background: var(--color-tag-get-bg);     color: var(--color-tag-get); }
+
+    .method-sig {
+      flex: 1;
+      min-width: 0;
+    }
+    .method-name {
+      font-family: var(--font-mono);
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--color-text);
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+    .method-name .arg { color: var(--color-text-muted); font-weight: 400; }
+    .method-name .type-hint { color: var(--color-primary); font-weight: 400; }
+    .method-summary {
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      margin-top: var(--space-1);
+      line-height: 1.5;
+    }
+
+    .method-chevron {
+      flex-shrink: 0;
+      color: var(--color-text-faint);
+      transition: transform var(--transition-interactive);
+      margin-top: 4px;
+    }
+    .method-card.open .method-chevron { transform: rotate(180deg); }
+
+    /* ─── Method Body ────────────────────────────────────────────────── */
+    .method-body {
+      display: none;
+      padding: var(--space-6);
+      gap: var(--space-6);
+      flex-direction: column;
+    }
+    .method-card.open .method-body { display: flex; }
+
+    .method-desc {
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      line-height: 1.75;
+      max-width: 68ch;
+    }
+    .method-desc strong { color: var(--color-text); font-weight: 600; }
+    .method-desc code {
+      font-family: var(--font-mono);
+      font-size: 0.88em;
+      background: var(--color-surface-offset);
+      padding: 1px 5px;
+      border-radius: var(--radius-sm);
+      color: var(--color-primary);
+    }
+
+    /* ─── Parameter Table ────────────────────────────────────────────── */
+    .param-table-wrap { overflow-x: auto; }
+    .param-section-label {
+      font-size: var(--text-xs);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-faint);
+      margin-bottom: var(--space-3);
+    }
+    .param-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: var(--text-sm);
+    }
+    .param-table thead th {
+      text-align: left;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--color-text-faint);
+      padding: var(--space-2) var(--space-4);
+      border-bottom: 1px solid var(--color-divider);
+      background: var(--color-surface-offset);
+    }
+    .param-table thead th:first-child { border-radius: var(--radius-md) 0 0 0; }
+    .param-table thead th:last-child { border-radius: 0 var(--radius-md) 0 0; }
+    .param-table tbody td {
+      padding: var(--space-3) var(--space-4);
+      vertical-align: top;
+      border-bottom: 1px solid var(--color-divider);
+      color: var(--color-text-muted);
+      line-height: 1.55;
+    }
+    .param-table tbody tr:last-child td { border-bottom: none; }
+    .param-table tbody tr:hover td { background: var(--color-surface-offset); }
+
+    .p-name {
+      font-family: var(--font-mono);
+      font-size: 0.875em;
+      font-weight: 600;
+      color: var(--color-text);
+      white-space: nowrap;
+    }
+    .p-type {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      color: var(--color-primary);
+      white-space: nowrap;
+    }
+    .p-default {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      color: var(--color-warning);
+    }
+    .p-required {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
+      background: var(--color-tag-raises-bg);
+      color: var(--color-tag-raises);
+    }
+    .p-optional {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
+      background: var(--color-surface-dynamic);
+      color: var(--color-text-faint);
+    }
+
+    /* ─── Returns / Raises blocks ────────────────────────────────────── */
+    .return-block, .raises-block, .notes-block {
+      border-radius: var(--radius-lg);
+      padding: var(--space-4) var(--space-5);
+      font-size: var(--text-sm);
+      line-height: 1.65;
+    }
+    .return-block {
+      background: var(--color-tag-returns-bg);
+      border: 1px solid oklch(from var(--color-primary) l c h / 0.18);
+    }
+    .raises-block {
+      background: var(--color-tag-raises-bg);
+      border: 1px solid oklch(from var(--color-error) l c h / 0.18);
+    }
+    .notes-block {
+      background: var(--color-tag-param-bg);
+      border: 1px solid oklch(from var(--color-tag-param) l c h / 0.18);
+    }
+    .block-label {
+      font-size: var(--text-xs);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: var(--space-2);
+    }
+    .return-block .block-label { color: var(--color-tag-returns); }
+    .raises-block .block-label { color: var(--color-tag-raises); }
+    .notes-block  .block-label { color: var(--color-tag-param); }
+
+    .return-block p, .raises-block p, .notes-block p {
+      color: var(--color-text-muted);
+      max-width: none;
+    }
+    .return-block code, .raises-block code, .notes-block code {
+      font-family: var(--font-mono);
+      font-size: 0.88em;
+      background: oklch(from var(--color-bg) l c h / 0.5);
+      padding: 1px 5px;
+      border-radius: var(--radius-sm);
+      color: var(--color-text);
+    }
+
+    /* ─── Code blocks ────────────────────────────────────────────────── */
+    .code-block-wrap { position: relative; }
+    .code-block-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--color-text-faint);
+      margin-bottom: var(--space-2);
+    }
+    .code-block {
+      background: var(--color-code-bg);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .code-block-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid oklch(from var(--color-border) l c h / 0.5);
+      background: oklch(from var(--color-code-bg) calc(l + 0.03) c h);
+    }
+    .code-lang {
+      font-size: var(--text-xs);
+      font-family: var(--font-mono);
+      color: var(--color-text-faint);
+      text-transform: lowercase;
+      letter-spacing: 0.05em;
+    }
+    .copy-btn {
+      font-size: var(--text-xs);
+      color: var(--color-text-faint);
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--color-border);
+      background: transparent;
+      cursor: pointer;
+      transition: color var(--transition-interactive), background var(--transition-interactive);
+    }
+    .copy-btn:hover { color: var(--color-text); background: var(--color-surface); }
+    .copy-btn.copied { color: var(--color-success); border-color: var(--color-success); }
+
+    pre {
+      padding: var(--space-5) var(--space-6);
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      line-height: 1.7;
+      color: var(--color-code-text);
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-border) transparent;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+
+    /* Syntax token colors */
+    .tok-kw   { color: #c792ea; } /* keywords */
+    .tok-str  { color: #c3e88d; } /* strings */
+    .tok-num  { color: #f78c6c; } /* numbers */
+    .tok-fn   { color: #82aaff; } /* function names */
+    .tok-cls  { color: #ffcb6b; } /* class names */
+    .tok-cmt  { color: #546e7a; font-style: italic; } /* comments */
+    .tok-var  { color: #eeffff; }
+    .tok-op   { color: #89ddff; }
+    .tok-pun  { color: #89ddff; }
+
+    /* ─── CLI reference table ────────────────────────────────────────── */
+    .cli-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: var(--text-sm);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .cli-table thead th {
+      text-align: left;
+      font-size: var(--text-xs);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--color-text-faint);
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-surface-offset);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .cli-table tbody td {
+      padding: var(--space-3) var(--space-4);
+      color: var(--color-text-muted);
+      border-bottom: 1px solid var(--color-divider);
+      vertical-align: top;
+    }
+    .cli-table tbody tr:last-child td { border-bottom: none; }
+    .cli-table tbody tr:hover td { background: var(--color-surface-offset); }
+    .cli-flag {
+      font-family: var(--font-mono);
+      font-size: 0.875em;
+      font-weight: 600;
+      color: var(--color-primary);
+      white-space: nowrap;
+    }
+
+    /* ─── Inline code ────────────────────────────────────────────────── */
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.875em;
+      background: var(--color-surface-offset);
+      padding: 1px 5px;
+      border-radius: var(--radius-sm);
+      color: var(--color-primary);
+    }
+
+    /* ─── Callout ────────────────────────────────────────────────────── */
+    .callout {
+      border-radius: var(--radius-lg);
+      padding: var(--space-4) var(--space-5);
+      font-size: var(--text-sm);
+      display: flex;
+      gap: var(--space-3);
+      align-items: flex-start;
+    }
+    .callout-warn {
+      background: color-mix(in oklch, var(--color-warning) 8%, var(--color-surface));
+      border: 1px solid oklch(from var(--color-warning) l c h / 0.2);
+    }
+    .callout-info {
+      background: color-mix(in oklch, var(--color-primary) 8%, var(--color-surface));
+      border: 1px solid oklch(from var(--color-primary) l c h / 0.2);
+    }
+    .callout-icon { flex-shrink: 0; font-size: 1rem; margin-top: 1px; }
+    .callout p { color: var(--color-text-muted); max-width: none; }
+    .callout strong { color: var(--color-text); }
+    .callout code { font-size: 0.85em; }
+
+    /* ─── Pipeline Diagram ───────────────────────────────────────────── */
+    .pipeline {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin: var(--space-4) 0;
+    }
+    .pipeline-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-size: var(--text-sm);
+    }
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      background: var(--color-surface-offset);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-3) var(--space-4);
+      flex: 1;
+    }
+    .pipeline-num {
+      width: 24px; height: 24px;
+      border-radius: var(--radius-full);
+      background: var(--color-primary-highlight);
+      color: var(--color-primary);
+      font-size: var(--text-xs);
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .pipeline-text strong { color: var(--color-text); display: block; font-size: var(--text-sm); }
+    .pipeline-text span { color: var(--color-text-muted); font-size: var(--text-xs); font-family: var(--font-mono); }
+    .pipeline-arrow { color: var(--color-text-faint); font-size: 0.75rem; }
+
+    /* ─── Env vars table ─────────────────────────────────────────────── */
+    .env-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-sm); }
+    .env-table tbody td { padding: var(--space-3) var(--space-4); color: var(--color-text-muted); border-bottom: 1px solid var(--color-divider); vertical-align: top; }
+    .env-table tbody tr:last-child td { border-bottom: none; }
+    .env-key { font-family: var(--font-mono); font-size: 0.875em; font-weight: 600; color: var(--color-text); white-space: nowrap; }
+    .env-val { font-family: var(--font-mono); font-size: 0.85em; color: var(--color-warning); }
+
+    /* ─── Breadcrumb ─────────────────────────────────────────────────── */
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      color: var(--color-text-faint);
+      margin-bottom: var(--space-6);
+    }
+    .breadcrumb a { color: var(--color-text-muted); text-decoration: none; }
+    .breadcrumb a:hover { color: var(--color-primary); }
+    .breadcrumb span { color: var(--color-text-faint); }
+
+    /* ─── TOC quick links ────────────────────────────────────────────── */
+    .toc-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      padding: var(--space-5) var(--space-6);
+      margin-bottom: var(--space-10);
+    }
+    .toc-title {
+      font-size: var(--text-xs);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-faint);
+      margin-bottom: var(--space-4);
+    }
+    .toc-links {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: var(--space-2);
+    }
+    .toc-link {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      text-decoration: none;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+    }
+    .toc-link:hover { color: var(--color-primary); background: var(--color-primary-highlight); }
+    .toc-link .dot {
+      width: 6px; height: 6px;
+      border-radius: var(--radius-full);
+      background: var(--color-primary);
+      flex-shrink: 0;
+      opacity: 0.5;
+    }
+
+    /* ─── Responsive ─────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      :root { --sidebar-w: 0px; }
+      .shell { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: var(--space-6) var(--space-4) var(--space-16); }
+      .topbar { padding: 0 var(--space-4); }
+      .topbar-nav { display: none; }
+    }
+
+    /* ─── Scrollbar ──────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-full); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--color-text-faint); }
+
+    /* ─── Animations ─────────────────────────────────────────────────── */
+    @keyframes fade-in-up {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .main { animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Topbar ───────────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <a href="index.html" class="topbar-logo" target="_blank" rel="noopener">
+      <!-- SVG drone/waypoint logo -->
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="MAVPose logo" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="14" cy="14" r="4" stroke="currentColor" stroke-width="1.8"/>
+        <circle cx="14" cy="14" r="1.5" fill="currentColor"/>
+        <line x1="14" y1="2" x2="14" y2="8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="14" y1="20" x2="14" y2="26" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="2" y1="14" x2="8" y2="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="20" y1="14" x2="26" y2="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="14" cy="3.5" r="2" fill="currentColor" opacity="0.7"/>
+        <circle cx="14" cy="24.5" r="2" fill="currentColor" opacity="0.7"/>
+        <circle cx="3.5" cy="14" r="2" fill="currentColor" opacity="0.7"/>
+        <circle cx="24.5" cy="14" r="2" fill="currentColor" opacity="0.7"/>
+      </svg>
+      <span class="logo-name">MAVPose</span>
+      <span class="logo-sep">/</span>
+      <span class="logo-page">API Reference</span>
+    </a>
+
+    <div class="topbar-spacer"></div>
+
+    <nav class="topbar-nav" aria-label="Primary navigation">
+      <a href="index.html" target="_blank" rel="noopener">Home</a>
+      <a href="#" class="active">API Reference</a>
+      <a href="https://github.com/AyushMaria/MAVPose" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+
+    <a href="https://github.com/AyushMaria/MAVPose" target="_blank" rel="noopener noreferrer" class="topbar-gh" style="margin-left: var(--space-3);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      GitHub
+    </a>
+
+    <button class="theme-toggle" data-theme-toggle aria-label="Toggle dark mode">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </header>
+
+  <!-- ── Sidebar ───────────────────────────────────────────────────────── -->
+  <aside class="sidebar" aria-label="API navigation">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <a href="#overview" class="sidebar-link active">Introduction</a>
+      <a href="#pipeline" class="sidebar-link">Pipeline Architecture</a>
+      <a href="#installation" class="sidebar-link">Installation</a>
+      <a href="#env-vars" class="sidebar-link">Environment Variables</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">CLI</div>
+      <a href="#cli" class="sidebar-link">mavpose (entry point)</a>
+      <a href="#cli-flags" class="sidebar-link">Flags Reference</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">PlotCreator</div>
+      <a href="#plotcreator" class="sidebar-link">Class Overview</a>
+      <a href="#plotcreator-init" class="sidebar-link">__init__</a>
+      <a href="#set-logfile-name" class="sidebar-link">set_logfile_name()</a>
+      <a href="#parse-mavlink-log" class="sidebar-link">parse_mavlink_log()</a>
+      <a href="#find-relevant-data-types" class="sidebar-link">find_relevant_data_types()</a>
+      <a href="#extract-dataframes" class="sidebar-link">extract_dataframes()</a>
+      <a href="#create-plot" class="sidebar-link">create_plot()</a>
+      <a href="#run-script" class="sidebar-link">run_script()</a>
+      <a href="#attempt-to-fix-script" class="sidebar-link">attempt_to_fix_script()</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Static Helpers</div>
+      <a href="#extract-code-snippets" class="sidebar-link">extract_code_snippets()</a>
+      <a href="#write-plot-script" class="sidebar-link">write_plot_script()</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Constants</div>
+      <a href="#constants" class="sidebar-link">Module Constants</a>
+    </div>
+  </aside>
+
+  <!-- ── Main ─────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <div class="breadcrumb">
+      <a href="index.html" target="_blank" rel="noopener">MAVPose</a>
+      <span>›</span>
+      <span>API Reference</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="page-header" id="overview">
+      <div class="page-header-eyebrow">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        Python API Reference
+      </div>
+      <h1>MAVPose API</h1>
+      <p>Complete reference for all public classes, methods, CLI flags, and environment variables exposed by the <code>mavpose</code> package.</p>
+      <div class="page-header-meta">
+        <div class="meta-chip">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          v0.1.0
+        </div>
+        <div class="meta-chip">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Python 3.10+
+        </div>
+        <div class="meta-chip">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          mavpose/PlotCreator.py
+        </div>
+      </div>
+    </div>
+
+    <!-- TOC -->
+    <div class="toc-card">
+      <div class="toc-title">On this page</div>
+      <div class="toc-links">
+        <a href="#pipeline" class="toc-link"><span class="dot"></span>Pipeline Architecture</a>
+        <a href="#cli" class="toc-link"><span class="dot"></span>CLI Entry Point</a>
+        <a href="#plotcreator" class="toc-link"><span class="dot"></span>PlotCreator Class</a>
+        <a href="#env-vars" class="toc-link"><span class="dot"></span>Environment Variables</a>
+        <a href="#constants" class="toc-link"><span class="dot"></span>Module Constants</a>
+        <a href="#installation" class="toc-link"><span class="dot"></span>Quick Start</a>
+      </div>
+    </div>
+
+    <!-- ── Pipeline Architecture ──────────────────────────────────────── -->
+    <section class="api-section" id="pipeline">
+      <h2 class="section-title">
+        Pipeline Architecture
+        <a href="#pipeline" class="section-anchor" aria-label="Link to section">#</a>
+      </h2>
+      <p class="section-desc">
+        MAVPose uses a strict two-phase pipeline. The LLM never sees raw binary telemetry — it only receives a typed, time-aligned Parquet schema.
+      </p>
+
+      <div class="pipeline">
+        <div class="pipeline-row">
+          <div class="pipeline-step">
+            <div class="pipeline-num">1a</div>
+            <div class="pipeline-text">
+              <strong>Schema Scan + Embeddings</strong>
+              <span>parse_mavlink_log() → ChromaDB</span>
+            </div>
+          </div>
+        </div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-row">
+          <div class="pipeline-step">
+            <div class="pipeline-num">1b</div>
+            <div class="pipeline-text">
+              <strong>Semantic Field Retrieval</strong>
+              <span>find_relevant_data_types(prompt)</span>
+            </div>
+          </div>
+        </div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-row">
+          <div class="pipeline-step">
+            <div class="pipeline-num">1c</div>
+            <div class="pipeline-text">
+              <strong>Full Extraction → Parquet</strong>
+              <span>extract_dataframes(msg_types)</span>
+            </div>
+          </div>
+        </div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-row">
+          <div class="pipeline-step">
+            <div class="pipeline-num">2a</div>
+            <div class="pipeline-text">
+              <strong>LLM Script Generation</strong>
+              <span>create_plot(prompt, schema_summary)</span>
+            </div>
+          </div>
+        </div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-row">
+          <div class="pipeline-step">
+            <div class="pipeline-num">2b</div>
+            <div class="pipeline-text">
+              <strong>Sandboxed Execution + Self-Heal</strong>
+              <span>run_script() → plot.png</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Installation ───────────────────────────────────────────────── -->
+    <section class="api-section" id="installation">
+      <h2 class="section-title">
+        Quick Start
+        <a href="#installation" class="section-anchor">#</a>
+      </h2>
+      <p class="section-desc">Install the package and configure your API key to begin.</p>
+
+      <div class="code-block-wrap" style="margin-bottom: var(--space-4);">
+        <div class="code-block">
+          <div class="code-block-topbar">
+            <span class="code-lang">bash</span>
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code><span class="tok-cmt"># Install</span>
+pip install mavpose
+
+<span class="tok-cmt"># Configure API key</span>
+<span class="tok-kw">set</span> OPENROUTER_API_KEY=your-key-here    <span class="tok-cmt"># Windows</span>
+<span class="tok-kw">export</span> OPENROUTER_API_KEY=your-key-here  <span class="tok-cmt"># macOS/Linux</span>
+
+<span class="tok-cmt"># Run via CLI</span>
+mavpose flight.tlog --prompt <span class="tok-str">"Plot altitude over time"</span>
+
+<span class="tok-cmt"># Or use the Python API</span>
+<span class="tok-kw">from</span> <span class="tok-var">mavpose.PlotCreator</span> <span class="tok-kw">import</span> <span class="tok-cls">PlotCreator</span>
+creator <span class="tok-op">=</span> <span class="tok-fn">PlotCreator</span>(max_retries<span class="tok-op">=</span><span class="tok-num">3</span>)
+creator.<span class="tok-fn">set_logfile_name</span>(<span class="tok-str">"flight.tlog"</span>)
+creator.<span class="tok-fn">parse_mavlink_log</span>()
+types <span class="tok-op">=</span> creator.<span class="tok-fn">find_relevant_data_types</span>(<span class="tok-str">"altitude over time"</span>)
+schema <span class="tok-op">=</span> creator.<span class="tok-fn">extract_dataframes</span>(types)
+creator.<span class="tok-fn">create_plot</span>(<span class="tok-str">"Plot altitude over time"</span>, schema)
+creator.<span class="tok-fn">run_script</span>()</code></pre>
+        </div>
+      </div>
+
+      <div class="callout callout-warn">
+        <span class="callout-icon">⚠️</span>
+        <p><strong>Never commit <code>.env</code></strong> — it is already in <code>.gitignore</code>. Use <code>template.env</code> as a reference and create your own <code>.env</code> from it.</p>
+      </div>
+    </section>
+
+    <!-- ── Environment Variables ──────────────────────────────────────── -->
+    <section class="api-section" id="env-vars">
+      <h2 class="section-title">
+        Environment Variables
+        <a href="#env-vars" class="section-anchor">#</a>
+      </h2>
+      <p class="section-desc">All configuration is done via environment variables, typically loaded from a <code>.env</code> file via <code>python-dotenv</code>.</p>
+
+      <table class="cli-table">
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Required</th>
+            <th>Default</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>OPENROUTER_API_KEY</code></td>
+            <td><span class="p-required">Required</span></td>
+            <td><span class="p-default">—</span></td>
+            <td>Your OpenRouter API key. Used for both LLM inference and embeddings.</td>
+          </tr>
+          <tr>
+            <td><code>OPENROUTER_MODEL</code></td>
+            <td><span class="p-optional">Optional</span></td>
+            <td><code>z-ai/glm-5.1</code></td>
+            <td>The OpenRouter model slug to use for plot generation and self-healing.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ── CLI ────────────────────────────────────────────────────────── -->
+    <section class="api-section" id="cli">
+      <h2 class="section-title">
+        CLI — <code>mavpose</code>
+        <a href="#cli" class="section-anchor">#</a>
+      </h2>
+      <p class="section-desc">The <code>mavpose</code> command is the headless CLI entry point defined in <code>mavpose/cli.py</code>. It wires the two-phase pipeline end-to-end.</p>
+
+      <div class="code-block-wrap" style="margin-bottom: var(--space-6);">
+        <div class="code-block">
+          <div class="code-block-topbar">
+            <span class="code-lang">usage</span>
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code>mavpose <span class="tok-var">log_file</span> [<span class="tok-var">options</span>]
+
+<span class="tok-cmt"># One-shot</span>
+mavpose flight.tlog <span class="tok-op">--</span>prompt <span class="tok-str">"Plot altitude over time"</span>
+
+<span class="tok-cmt"># With custom retry count and verbose logging</span>
+mavpose flight.tlog <span class="tok-op">-</span>p <span class="tok-str">"Show battery voltage"</span> <span class="tok-op">-</span>r <span class="tok-num">5</span> <span class="tok-op">-</span>v
+
+<span class="tok-cmt"># Interactive REPL mode (omit --prompt)</span>
+mavpose flight.tlog</code></pre>
+        </div>
+      </div>
+
+      <div id="cli-flags">
+        <h3 style="font-size: var(--text-base); font-weight: 600; color: var(--color-text); margin-bottom: var(--space-4); letter-spacing: -0.01em;">Flags Reference</h3>
+        <table class="cli-table">
+          <thead>
+            <tr>
+              <th>Flag</th>
+              <th>Short</th>
+              <th>Type</th>
+              <th>Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="cli-flag">log_file</span></td>
+              <td>—</td>
+              <td><code>path</code></td>
+              <td><span class="p-required">Required</span></td>
+              <td>Path to a MAVLink log file. Accepts <code>.tlog</code>, <code>.bin</code>, <code>.log</code>.</td>
+            </tr>
+            <tr>
+              <td><span class="cli-flag">--prompt</span></td>
+              <td><span class="cli-flag">-p</span></td>
+              <td><code>str</code></td>
+              <td><code>None</code></td>
+              <td>Natural-language plot request. Omit to enter interactive REPL mode.</td>
+            </tr>
+            <tr>
+              <td><span class="cli-flag">--retries</span></td>
+              <td><span class="cli-flag">-r</span></td>
+              <td><code>int</code></td>
+              <td><code>3</code></td>
+              <td>Maximum number of self-healing retries when the generated script fails.</td>
+            </tr>
+            <tr>
+              <td><span class="cli-flag">--verbose</span></td>
+              <td><span class="cli-flag">-v</span></td>
+              <td><code>flag</code></td>
+              <td><code>False</code></td>
+              <td>Enable <code>DEBUG</code>-level logging output.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-info" style="margin-top: var(--space-6);">
+        <span class="callout-icon">💡</span>
+        <p>In interactive mode the REPL reuses the parsed schema across queries — re-parsing and re-embedding are skipped on every subsequent prompt. Type <code>quit</code>, <code>exit</code>, or <code>q</code> to stop.</p>
+      </div>
+    </section>
+
+    <!-- ── PlotCreator Class ──────────────────────────────────────────── -->
+    <section class="api-section" id="plotcreator">
+      <h2 class="section-title">
+        <code>class PlotCreator</code>
+        <a href="#plotcreator" class="section-anchor">#</a>
+      </h2>
+      <p class="section-desc">
+        The central orchestrator. Encapsulates the full two-phase pipeline: log extraction → ChromaDB semantic search → LLM script generation → sandboxed execution with self-healing.
+        Defined in <code>mavpose/PlotCreator.py</code>.
+      </p>
+
+      <!-- __init__ -->
+      <div class="method-card open" id="plotcreator-init">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-init">init</span>
+          <div class="method-sig">
+            <div class="method-name">
+              __init__<span class="arg">(self, max_retries: </span><span class="type-hint">int</span><span class="arg"> = 3)</span>
+            </div>
+            <div class="method-summary">Initialise the PlotCreator, load environment, build LangChain LLM chains.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Loads <code>.env</code> via <code>python-dotenv</code>, reads <code>OPENROUTER_API_KEY</code> and <code>OPENROUTER_MODEL</code>, and constructs two <strong>LangChain LCEL chains</strong> — a plot-generation chain and a fix chain — both backed by <code>ChatOpenAI</code> pointing at the OpenRouter base URL.
+          </p>
+
+          <div>
+            <div class="param-section-label">Parameters</div>
+            <div class="param-table-wrap">
+              <table class="param-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="p-name">max_retries</td>
+                    <td class="p-type">int</td>
+                    <td class="p-default">3</td>
+                    <td>Maximum self-healing retries when <code>run_script()</code> encounters an error.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="raises-block">
+            <div class="block-label">Raises</div>
+            <p><code>KeyError</code> — if <code>OPENROUTER_API_KEY</code> is not set in the environment.</p>
+          </div>
+
+          <div>
+            <div class="code-block-label">Instance attributes set during init</div>
+            <div class="code-block">
+              <div class="code-block-topbar"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+              <pre><code>creator.logfile_name    <span class="tok-op">=</span> <span class="tok-str">""</span>          <span class="tok-cmt"># str — active log path</span>
+creator.script_path     <span class="tok-op">=</span> <span class="tok-str">""</span>          <span class="tok-cmt"># str — plot.py output path</span>
+creator.plot_path       <span class="tok-op">=</span> <span class="tok-str">""</span>          <span class="tok-cmt"># str — plot.png output path</span>
+creator.parquet_path    <span class="tok-op">=</span> <span class="tok-str">""</span>          <span class="tok-cmt"># str — telemetry.parquet path</span>
+creator.last_code       <span class="tok-op">=</span> <span class="tok-str">""</span>          <span class="tok-cmt"># str — last generated script</span>
+creator.message_types   <span class="tok-op">=</span> {}          <span class="tok-cmt"># dict — schema from schema_only()</span>
+creator.db              <span class="tok-op">=</span> <span class="tok-cls">None</span>        <span class="tok-cmt"># Chroma | None</span>
+creator.max_retries     <span class="tok-op">=</span> <span class="tok-num">3</span>           <span class="tok-cmt"># int</span>
+creator.model           <span class="tok-op">=</span> <span class="tok-str">"z-ai/glm-5.1"</span>  <span class="tok-cmt"># str — active model slug</span></code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- set_logfile_name -->
+      <div class="method-card" id="set-logfile-name">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-method">method</span>
+          <div class="method-sig">
+            <div class="method-name">
+              set_logfile_name<span class="arg">(self, filename: </span><span class="type-hint">str</span><span class="arg">) → </span><span class="type-hint">None</span>
+            </div>
+            <div class="method-summary">Register a log file and derive all output paths.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Validates the file extension, resolves the absolute path, and sets <code>self.script_path</code>, <code>self.plot_path</code>, <code>self.parquet_path</code> all relative to the log file's directory. Also instantiates the internal <code>LogExtractor</code>.
+            <br><br>
+            <strong>Must be called before any other method.</strong>
+          </p>
+
+          <div>
+            <div class="param-section-label">Parameters</div>
+            <div class="param-table-wrap">
+              <table class="param-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="p-name">filename</td>
+                    <td class="p-type">str</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>Path to a MAVLink log file. Must end in <code>.tlog</code>, <code>.bin</code>, or <code>.log</code>.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="raises-block">
+            <div class="block-label">Raises</div>
+            <p><code>ValueError</code> — if the file extension is not in <code>{'.tlog', '.bin', '.log'}</code>.</p>
+          </div>
+
+          <div>
+            <div class="code-block-label">Example</div>
+            <div class="code-block">
+              <div class="code-block-topbar"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+              <pre><code>creator.<span class="tok-fn">set_logfile_name</span>(<span class="tok-str">"logs/2024-06-01.tlog"</span>)
+<span class="tok-cmt"># Derived paths (all in logs/):</span>
+<span class="tok-cmt">#   script_path  → logs/plot.py</span>
+<span class="tok-cmt">#   plot_path    → logs/plot.png</span>
+<span class="tok-cmt">#   parquet_path → logs/telemetry.parquet</span></code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- parse_mavlink_log -->
+      <div class="method-card" id="parse-mavlink-log">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-method">method</span>
+          <div class="method-sig">
+            <div class="method-name">
+              parse_mavlink_log<span class="arg">(self) → </span><span class="type-hint">str</span>
+            </div>
+            <div class="method-summary">Phase 1a — schema-only scan and ChromaDB embedding build.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Runs a <strong>schema-only scan</strong> of the MAVLink log — no DataFrames are allocated. Calls <code>LogExtractor.schema_only()</code> to collect message-type metadata, then builds a <strong>ChromaDB vector index</strong> persisted to <code>&lt;log_dir&gt;/chroma_db/</code> via <code>OpenAIEmbeddings</code> (using the OpenRouter embeddings endpoint). Subsequent calls to the same log directory skip re-embedding automatically.
+          </p>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p>JSON-encoded <code>str</code> of all discovered message types and their fields (pretty-printed with <code>indent=4</code>).</p>
+          </div>
+
+          <div class="raises-block">
+            <div class="block-label">Raises</div>
+            <p><code>RuntimeError</code> — if <code>set_logfile_name()</code> has not been called first.</p>
+          </div>
+
+          <div>
+            <div class="code-block-label">Example output (truncated)</div>
+            <div class="code-block">
+              <div class="code-block-topbar"><span class="code-lang">json</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+              <pre><code>{
+  <span class="tok-str">"GLOBAL_POSITION_INT"</span>: {
+    <span class="tok-str">"fields"</span>: [<span class="tok-str">"time_boot_ms"</span>, <span class="tok-str">"lat"</span>, <span class="tok-str">"lon"</span>, <span class="tok-str">"alt"</span>, <span class="tok-str">"relative_alt"</span>],
+    <span class="tok-str">"count"</span>: <span class="tok-num">4821</span>
+  },
+  <span class="tok-str">"SYS_STATUS"</span>: {
+    <span class="tok-str">"fields"</span>: [<span class="tok-str">"voltage_battery"</span>, <span class="tok-str">"current_battery"</span>],
+    <span class="tok-str">"count"</span>: <span class="tok-num">960</span>
+  }
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- find_relevant_data_types -->
+      <div class="method-card" id="find-relevant-data-types">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-method">method</span>
+          <div class="method-sig">
+            <div class="method-name">
+              find_relevant_data_types<span class="arg">(self, human_input: </span><span class="type-hint">str</span><span class="arg">) → </span><span class="type-hint">List[str]</span>
+            </div>
+            <div class="method-summary">Semantic similarity search to resolve relevant MAVLink message types.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Queries the ChromaDB vector store (built by <code>parse_mavlink_log()</code>) with a <code>similarity_search</code> against the user's natural-language prompt. Each stored document is a JSON-encoded single message type; the method extracts the message type names from the retrieved documents and deduplicates them while preserving result order.
+          </p>
+
+          <div>
+            <div class="param-section-label">Parameters</div>
+            <div class="param-table-wrap">
+              <table class="param-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="p-name">human_input</td>
+                    <td class="p-type">str</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>The user's natural-language plot request (e.g. <code>"Plot altitude over time"</code>).</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>List[str]</code> — deduplicated list of MAVLink message type names most semantically relevant to <code>human_input</code>. Preserves order of similarity score.</p>
+          </div>
+
+          <div class="raises-block">
+            <div class="block-label">Raises</div>
+            <p><code>RuntimeError</code> — if <code>parse_mavlink_log()</code> has not been called (vector store is <code>None</code>).</p>
+          </div>
+
+          <div>
+            <div class="code-block-label">Example</div>
+            <div class="code-block">
+              <div class="code-block-topbar"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+              <pre><code>types <span class="tok-op">=</span> creator.<span class="tok-fn">find_relevant_data_types</span>(<span class="tok-str">"altitude over time"</span>)
+<span class="tok-cmt"># → ['GLOBAL_POSITION_INT', 'GPS_RAW_INT']</span></code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- extract_dataframes -->
+      <div class="method-card" id="extract-dataframes">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-method">method</span>
+          <div class="method-sig">
+            <div class="method-name">
+              extract_dataframes<span class="arg">(self, msg_types: </span><span class="type-hint">List[str]</span><span class="arg">) → </span><span class="type-hint">Dict[str, dict]</span>
+            </div>
+            <div class="method-summary">Phase 1b — full extraction of message types and export to Parquet.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Runs the <strong>full extraction</strong> for the given message types via <code>LogExtractor.extract_all()</code>, then calls <code>LogExtractor.export_parquet(msg_types, parquet_path)</code> which:
+          </p>
+          <ul style="font-size: var(--text-sm); color: var(--color-text-muted); padding-left: var(--space-5); margin-top: var(--space-2); line-height: 1.8;">
+            <li>Normalises timestamps into a <code>time_s</code> float64 column (seconds from log start).</li>
+            <li>Tags every row with its <code>msg_type</code>.</li>
+            <li>Concatenates all requested message types into a single time-aligned Parquet file at <code>self.parquet_path</code>.</li>
+          </ul>
+          <p class="method-desc" style="margin-top: var(--space-3);">The returned schema summary is injected directly into the LLM prompt — the LLM never touches the binary log.</p>
+
+          <div>
+            <div class="param-section-label">Parameters</div>
+            <div class="param-table-wrap">
+              <table class="param-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="p-name">msg_types</td>
+                    <td class="p-type">List[str]</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>List of MAVLink message type names to extract (e.g. <code>['GLOBAL_POSITION_INT']</code>). Typically the output of <code>find_relevant_data_types()</code>.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>Dict[str, dict]</code> — schema summary keyed by message type. Each value contains <code>rows</code> (int), and <code>columns</code> (dict of <code>col → {dtype, min, max}</code>). Numeric columns include <code>min</code> and <code>max</code>; non-numeric columns only include <code>dtype</code>.</p>
+          </div>
+
+          <div class="raises-block">
+            <div class="block-label">Raises</div>
+            <p><code>RuntimeError</code> — if <code>set_logfile_name()</code> has not been called first.</p>
+          </div>
+
+          <div>
+            <div class="code-block-label">Schema summary shape</div>
+            <div class="code-block">
+              <div class="code-block-topbar"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+              <pre><code>{
+  <span class="tok-str">"GLOBAL_POSITION_INT"</span>: {
+    <span class="tok-str">"rows"</span>: <span class="tok-num">4821</span>,
+    <span class="tok-str">"columns"</span>: {
+      <span class="tok-str">"time_s"</span>: {<span class="tok-str">"dtype"</span>: <span class="tok-str">"float64"</span>, <span class="tok-str">"min"</span>: <span class="tok-num">0.0</span>,   <span class="tok-str">"max"</span>: <span class="tok-num">623.4</span>},
+      <span class="tok-str">"alt"</span>:    {<span class="tok-str">"dtype"</span>: <span class="tok-str">"float64"</span>, <span class="tok-str">"min"</span>: <span class="tok-num">10.2</span>,  <span class="tok-str">"max"</span>: <span class="tok-num">142.7</span>},
+      <span class="tok-str">"msg_type"</span>:{<span class="tok-str">"dtype"</span>: <span class="tok-str">"object"</span>}
+    }
+  }
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- create_plot -->
+      <div class="method-card" id="create-plot">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-method">method</span>
+          <div class="method-sig">
+            <div class="method-name">
+              create_plot<span class="arg">(self, human_input: </span><span class="type-hint">str</span><span class="arg">, schema_summary: </span><span class="type-hint">Dict[str, dict]</span><span class="arg">) → </span><span class="type-hint">str</span>
+            </div>
+            <div class="method-summary">Phase 2a — ask the LLM to write a pandas + matplotlib plotting script.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Invokes <code>self._plot_chain</code> (a LangChain LCEL chain with a structured <code>PromptTemplate</code>) with the schema summary, Parquet path, output path, conversation history, and the user's request. The LLM is instructed to return only a fenced <code>```python```</code> block. The extracted script is written to <code>self.script_path</code> and cached in <code>self.last_code</code>.
+          </p>
+
+          <div>
+            <div class="param-section-label">Parameters</div>
+            <div class="param-table-wrap">
+              <table class="param-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="p-name">human_input</td>
+                    <td class="p-type">str</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>The user's natural-language plot request.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-name">schema_summary</td>
+                    <td class="p-type">Dict[str, dict]</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>Schema dict returned by <code>extract_dataframes()</code>. Injected verbatim into the LLM prompt.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>str</code> — the generated Python script. Also written to disk at <code>self.script_path</code>.</p>
+          </div>
+
+          <div class="notes-block">
+            <div class="block-label">LLM Rules enforced via prompt</div>
+            <p>
+              The LLM is instructed to: read data with <code>pd.read_parquet(parquet_path)</code>, filter by <code>msg_type</code> column, use <code>time_s</code> as the X axis (float64 seconds), save the figure to <code>output_file</code> at <code>dpi=400</code>, and <strong>never</strong> call <code>plt.show()</code>. Prohibited imports: <code>pymavlink</code>, <code>subprocess</code>, <code>os</code>, <code>sys</code>, <code>socket</code>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- run_script -->
+      <div class="method-card" id="run-script">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-method">method</span>
+          <div class="method-sig">
+            <div class="method-name">
+              run_script<span class="arg">(self) → </span><span class="type-hint">tuple</span>
+            </div>
+            <div class="method-summary">Phase 2b — execute the generated script with sandboxed self-healing.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Runs <code>self.script_path</code> via <code>subprocess.check_output(["python", self.script_path], stderr=STDOUT)</code>. On failure, calls <code>attempt_to_fix_script(error_text)</code> and retries up to <code>self.max_retries</code> times. Each fix cycle feeds the stderr and the failing script back to the LLM via <code>self._fix_chain</code>.
+          </p>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>(result, last_code)</code> — a tuple where <code>result</code> is <code>[[(None, (self.plot_path,))]]</code> (plot path wrapper) and <code>last_code</code> is the final script string. If all retries are exhausted, <code>last_code</code> is prefixed with a comment explaining the failure.</p>
+          </div>
+
+          <div>
+            <div class="code-block-label">Retry behaviour</div>
+            <div class="code-block">
+              <div class="code-block-topbar"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+              <pre><code><span class="tok-kw">for</span> attempt <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">1</span>, self.max_retries <span class="tok-op">+</span> <span class="tok-num">1</span>):
+    <span class="tok-kw">try</span>:
+        subprocess.<span class="tok-fn">check_output</span>([<span class="tok-str">"python"</span>, self.script_path], stderr<span class="tok-op">=</span>STDOUT)
+        <span class="tok-kw">break</span>  <span class="tok-cmt"># success — exit loop</span>
+    <span class="tok-kw">except</span> CalledProcessError <span class="tok-kw">as</span> exc:
+        <span class="tok-kw">if</span> attempt <span class="tok-op">&lt;</span> self.max_retries:
+            self.<span class="tok-fn">attempt_to_fix_script</span>(exc.output.<span class="tok-fn">decode</span>())</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- attempt_to_fix_script -->
+      <div class="method-card" id="attempt-to-fix-script">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-method">method</span>
+          <div class="method-sig">
+            <div class="method-name">
+              attempt_to_fix_script<span class="arg">(self, error_message: </span><span class="type-hint">str</span><span class="arg">) → </span><span class="type-hint">str</span>
+            </div>
+            <div class="method-summary">Feed the traceback back to the LLM and rewrite the failing script.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Reads the current failing script from <code>self.script_path</code>, reconstructs the schema summary from <code>self._extractor.frames</code>, then invokes <code>self._fix_chain</code> with the script, error text, schema, and Parquet path. The corrected script is written back to <code>self.script_path</code>. Called automatically by <code>run_script()</code> — you rarely need to call this directly.
+          </p>
+
+          <div>
+            <div class="param-section-label">Parameters</div>
+            <div class="param-table-wrap">
+              <table class="param-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="p-name">error_message</td>
+                    <td class="p-type">str</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>The stderr or exception text from the failed subprocess run.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>str</code> — the fixed (or best-effort) script. Also written to <code>self.script_path</code>.</p>
+          </div>
+
+          <div class="notes-block">
+            <div class="block-label">Note</div>
+            <p>If the LLM fix request itself fails (e.g. network error), the original failing script is returned unchanged and the error is logged at <code>ERROR</code> level.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Static Helpers ─────────────────────────────────────────────── -->
+    <section class="api-section" id="extract-code-snippets">
+      <h2 class="section-title">
+        Static Helpers
+        <a href="#extract-code-snippets" class="section-anchor">#</a>
+      </h2>
+      <p class="section-desc">Utility static methods on <code>PlotCreator</code> — can be called without an instance.</p>
+
+      <div class="method-card">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-static">static</span>
+          <div class="method-sig">
+            <div class="method-name">
+              extract_code_snippets<span class="arg">(text: </span><span class="type-hint">str</span><span class="arg">) → </span><span class="type-hint">list</span>
+            </div>
+            <div class="method-summary">Extract fenced ```python``` blocks from an LLM response string.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Uses <code>re.findall(r"```.*?\n(.*?)```", text, re.DOTALL | re.MULTILINE)</code> to extract all fenced code blocks from the LLM response. Falls back to <code>[text]</code> when no fences are found, so downstream code always receives a non-empty list.
+          </p>
+
+          <div>
+            <div class="param-section-label">Parameters</div>
+            <div class="param-table-wrap">
+              <table class="param-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="p-name">text</td>
+                    <td class="p-type">str</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>Raw LLM response string, potentially containing one or more fenced code blocks.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>list</code> — list of extracted code snippet strings. Falls back to <code>[text]</code> when no fences are found.</p>
+          </div>
+
+          <div>
+            <div class="code-block-label">Example</div>
+            <div class="code-block">
+              <div class="code-block-topbar"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+              <pre><code>snippets <span class="tok-op">=</span> PlotCreator.<span class="tok-fn">extract_code_snippets</span>(llm_response)
+code <span class="tok-op">=</span>               <pre><code>snippets <span class="tok-op">=</span> PlotCreator.<span class="tok-fn">extract_code_snippets</span>(llm_response)
+code <span class="tok-op">=</span> snippets[<span class="tok-num">0</span>]  <span class="tok-cmt"># first (and usually only) block</span>
+
+<span class="tok-cmt"># Fallback: if the LLM returned raw code without fences</span>
+assert <span class="tok-fn">len</span>(snippets) <span class="tok-op">&gt;</span> <span class="tok-num">0</span>  <span class="tok-cmt"># always True — falls back to [text]</span></code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- write_plot_script -->
+      <div class="method-card" id="write-plot-script">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-static">static</span>
+          <div class="method-sig">
+            <div class="method-name">
+              write_plot_script<span class="arg">(filename: </span><span class="type-hint">str</span><span class="arg">, text: </span><span class="type-hint">str</span><span class="arg">) → </span><span class="type-hint">None</span>
+            </div>
+            <div class="method-summary">Write a script string to disk at the given path.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Simple file-write helper. Opens <code>filename</code> in write mode (UTF-8) and writes <code>text</code>. Used internally after every LLM generation and fix cycle to persist the script to <code>self.script_path</code>.
+          </p>
+
+          <div>
+            <div class="param-section-label">Parameters</div>
+            <div class="param-table-wrap">
+              <table class="param-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="p-name">filename</td>
+                    <td class="p-type">str</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>Destination file path (e.g. <code>"logs/plot.py"</code>).</td>
+                  </tr>
+                  <tr>
+                    <td class="p-name">text</td>
+                    <td class="p-type">str</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>Python source code string to write.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>None</code>. Raises <code>OSError</code> if the path is not writable.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── LogExtractor Class ──────────────────────────────────────────── -->
+    <section class="api-section" id="logextractor">
+      <h2 class="section-title">
+        <code>class LogExtractor</code>
+        <a href="#logextractor" class="section-anchor">#</a>
+      </h2>
+      <p class="section-desc">
+        Headless database-query layer for MAVLink flight logs. Parses <code>.tlog</code> / <code>.bin</code> / <code>.log</code> files into per-message-type pandas DataFrames with a normalised <code>time_s</code> column, and exports a clean Parquet file for LLM consumption.
+        Defined in <code>mavpose/log_extractor.py</code>.
+      </p>
+
+      <!-- LogExtractor __init__ -->
+      <div class="method-card" id="logextractor-init">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-init">init</span>
+          <div class="method-sig">
+            <div class="method-name">
+              __init__<span class="arg">(self, log_path: </span><span class="type-hint">str</span><span class="arg">)</span>
+            </div>
+            <div class="method-summary">Initialise the extractor and validate the log file exists.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Checks that <code>log_path</code> exists on disk and stores it. Internal state (<code>_frames</code>, <code>_schema</code>, <code>_extracted</code>) is initialised but not populated until <code>extract_all()</code> or <code>schema_only()</code> is called.
+          </p>
+
+          <div>
+            <div class="param-section-label">Parameters</div>
+            <div class="param-table-wrap">
+              <table class="param-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="p-name">log_path</td>
+                    <td class="p-type">str</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>Absolute or relative path to a MAVLink <code>.tlog</code>, <code>.bin</code>, or <code>.log</code> file.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="raises-block">
+            <div class="block-label">Raises</div>
+            <p><code>FileNotFoundError</code> — if <code>log_path</code> does not exist.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- schema_only -->
+      <div class="method-card" id="schema-only">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-method">method</span>
+          <div class="method-sig">
+            <div class="method-name">
+              schema_only<span class="arg">(self) → </span><span class="type-hint">Dict[str, dict]</span>
+            </div>
+            <div class="method-summary">Fast single-pass scan — collects message-type metadata without allocating DataFrames.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Opens the log with <code>pymavlink.mavutil.mavlink_connection()</code> and performs a single pass, recording message type names, field names, Python type strings, and message counts — <strong>without</strong> building any DataFrame rows. This makes it fast enough to run before embedding without significant memory overhead. Results are stored in <code>self._schema</code> and also returned.
+          </p>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>Dict[str, dict]</code> — mapping of <code>msg_type → {"count": int, "fields": {name: type_str}}</code>. Suitable for building ChromaDB embeddings in <code>PlotCreator._create_embeddings()</code>.</p>
+          </div>
+
+          <div>
+            <div class="code-block-label">Return shape</div>
+            <div class="code-block">
+              <div class="code-block-topbar"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+              <pre><code>{
+  <span class="tok-str">"GLOBAL_POSITION_INT"</span>: {
+    <span class="tok-str">"count"</span>: <span class="tok-num">4821</span>,
+    <span class="tok-str">"fields"</span>: {
+      <span class="tok-str">"time_boot_ms"</span>: <span class="tok-str">"int"</span>,
+      <span class="tok-str">"lat"</span>:          <span class="tok-str">"int"</span>,
+      <span class="tok-str">"lon"</span>:          <span class="tok-str">"int"</span>,
+      <span class="tok-str">"alt"</span>:          <span class="tok-str">"int"</span>,
+      <span class="tok-str">"relative_alt"</span>: <span class="tok-str">"int"</span>
+    }
+  }
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- extract_all -->
+      <div class="method-card" id="extract-all">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-method">method</span>
+          <div class="method-sig">
+            <div class="method-name">
+              extract_all<span class="arg">(self) → </span><span class="type-hint">Dict[str, pd.DataFrame]</span>
+            </div>
+            <div class="method-summary">Full two-pass extraction — builds time-aligned DataFrames for every message type.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Performs a <strong>full parse</strong> of the MAVLink log in two phases:
+          </p>
+          <ul style="font-size: var(--text-sm); color: var(--color-text-muted); padding-left: var(--space-5); margin: var(--space-2) 0 var(--space-3); line-height: 1.85;">
+            <li><strong>Pass 1</strong> — collects raw row-dicts per message type.</li>
+            <li><strong>Pass 2</strong> — builds DataFrames, normalises <code>time_s</code> (seconds from first message), casts all numeric columns to <code>float64</code>, drops non-scalar fields (arrays, nested structs), and sorts by <code>time_s</code>.</li>
+          </ul>
+          <p class="method-desc">
+            Timestamps are resolved from MAVLink fields in priority order: <code>time_usec</code> → <code>time_unix_usec</code> → <code>time_us</code> → <code>usec</code>. If none are present, a monotonic fallback (<code>seq × 0.001 s</code>) is used.
+          </p>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>Dict[str, pd.DataFrame]</code> — mapping of <code>msg_type → DataFrame</code>. Every DataFrame has at minimum <code>time_s</code> (float64) and <code>msg_type</code> (str) columns, plus all scalar fields from that message type.</p>
+          </div>
+
+          <div>
+            <div class="code-block-label">DataFrame column contract</div>
+            <div class="code-block">
+              <div class="code-block-topbar"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+              <pre><code>df <span class="tok-op">=</span> extractor.frames[<span class="tok-str">"GLOBAL_POSITION_INT"</span>]
+df.dtypes
+<span class="tok-cmt"># time_s      float64    ← seconds from log start</span>
+<span class="tok-cmt"># msg_type    object     ← always "GLOBAL_POSITION_INT"</span>
+<span class="tok-cmt"># lat         float64</span>
+<span class="tok-cmt"># lon         float64</span>
+<span class="tok-cmt"># alt         float64</span>
+<span class="tok-cmt"># relative_alt float64</span></code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- export_parquet -->
+      <div class="method-card" id="export-parquet">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-method">method</span>
+          <div class="method-sig">
+            <div class="method-name">
+              export_parquet<span class="arg">(self, msg_types: </span><span class="type-hint">List[str]</span><span class="arg">, output_path: </span><span class="type-hint">str</span><span class="arg">) → </span><span class="type-hint">Dict[str, dict]</span>
+            </div>
+            <div class="method-summary">Export selected message types to a single time-aligned Parquet file.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Concatenates the DataFrames for the requested <code>msg_types</code>, sorts by <code>time_s</code>, and writes a single Parquet file via <code>pyarrow</code>. Unknown types (not found in the log) are silently skipped with a warning. Builds and returns a schema summary dict with per-column <code>dtype</code>, <code>min</code>, and <code>max</code> — this is injected directly into the LLM prompt by <code>PlotCreator.extract_dataframes()</code>.
+          </p>
+
+          <div>
+            <div class="param-section-label">Parameters</div>
+            <div class="param-table-wrap">
+              <table class="param-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="p-name">msg_types</td>
+                    <td class="p-type">List[str]</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>MAVLink message type names to include. Types absent from the log are skipped with a warning.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-name">output_path</td>
+                    <td class="p-type">str</td>
+                    <td><span class="p-required">Required</span></td>
+                    <td>Destination <code>.parquet</code> file path. Parent directories are created automatically.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>Dict[str, dict]</code> — schema summary. Numeric columns include <code>min</code> and <code>max</code>; non-numeric columns include only <code>dtype</code>.</p>
+          </div>
+
+          <div class="raises-block">
+            <div class="block-label">Raises</div>
+            <p><code>RuntimeError</code> — if <code>extract_all()</code> has not been called first.<br>
+            <code>ValueError</code> — if none of the requested <code>msg_types</code> were found in the log.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- frames property -->
+      <div class="method-card" id="frames-prop">
+        <div class="method-header" onclick="toggleCard(this)">
+          <span class="method-badge badge-prop">prop</span>
+          <div class="method-sig">
+            <div class="method-name">
+              frames<span class="arg"> → </span><span class="type-hint">Dict[str, pd.DataFrame]</span>
+            </div>
+            <div class="method-summary">Read-only property — returns the extracted frames dict.</div>
+          </div>
+          <svg class="method-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="method-body">
+          <p class="method-desc">
+            Returns <code>self._frames</code> — the dict populated by <code>extract_all()</code>. Returns an empty dict <code>{}</code> until <code>extract_all()</code> has been called. Used by <code>PlotCreator.attempt_to_fix_script()</code> to rebuild the schema summary for the fix prompt.
+          </p>
+
+          <div class="return-block">
+            <div class="block-label">Returns</div>
+            <p><code>Dict[str, pd.DataFrame]</code> — empty until <code>extract_all()</code> is called.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Module Constants ───────────────────────────────────────────── -->
+    <section class="api-section" id="constants">
+      <h2 class="section-title">
+        Module Constants
+        <a href="#constants" class="section-anchor">#</a>
+      </h2>
+      <p class="section-desc">Top-level constants defined in <code>mavpose/PlotCreator.py</code> and <code>mavpose/safe_executor.py</code>. Override via environment variables where applicable.</p>
+
+      <table class="cli-table">
+        <thead>
+          <tr>
+            <th>Constant</th>
+            <th>Module</th>
+            <th>Value</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>VALID_EXTENSIONS</code></td>
+            <td><code>PlotCreator.py</code></td>
+            <td><code>{'.tlog', '.bin', '.log'}</code></td>
+            <td>Accepted MAVLink log file extensions. Checked by <code>set_logfile_name()</code>.</td>
+          </tr>
+          <tr>
+            <td><code>OPENROUTER_BASE_URL</code></td>
+            <td><code>PlotCreator.py</code></td>
+            <td><code>"https://openrouter.ai/api/v1"</code></td>
+            <td>Base URL for the OpenRouter API, used by both ChatOpenAI and OpenAIEmbeddings.</td>
+          </tr>
+          <tr>
+            <td><code>DEFAULT_MODEL</code></td>
+            <td><code>PlotCreator.py</code></td>
+            <td><code>"z-ai/glm-5.1"</code></td>
+            <td>Default LLM model slug. Overridden by <code>OPENROUTER_MODEL</code> env var.</td>
+          </tr>
+          <tr>
+            <td><code>EMBEDDING_MODEL</code></td>
+            <td><code>PlotCreator.py</code></td>
+            <td><code>"openai/text-embedding-3-small"</code></td>
+            <td>Embedding model used to build the ChromaDB vector index.</td>
+          </tr>
+          <tr>
+            <td><code>BLOCKED_MODULES</code></td>
+            <td><code>safe_executor.py</code></td>
+            <td><em>See below</em></td>
+            <td>Set of module names the generated script is forbidden to import directly.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top: var(--space-6);">
+        <div class="code-block-label">BLOCKED_MODULES (safe_executor.py)</div>
+        <div class="code-block">
+          <div class="code-block-topbar"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><code>BLOCKED_MODULES <span class="tok-op">=</span> {
+    <span class="tok-str">"os"</span>, <span class="tok-str">"subprocess"</span>, <span class="tok-str">"sys"</span>, <span class="tok-str">"shutil"</span>,
+    <span class="tok-str">"socket"</span>, <span class="tok-str">"importlib"</span>, <span class="tok-str">"ctypes"</span>, <span class="tok-str">"signal"</span>,
+    <span class="tok-str">"pty"</span>, <span class="tok-str">"tty"</span>, <span class="tok-str">"termios"</span>, <span class="tok-str">"fcntl"</span>,
+    <span class="tok-str">"pwd"</span>, <span class="tok-str">"grp"</span>, <span class="tok-str">"resource"</span>,
+    <span class="tok-str">"multiprocessing"</span>, <span class="tok-str">"threading"</span>, <span class="tok-str">"concurrent"</span>,
+    <span class="tok-str">"asyncio"</span>, <span class="tok-str">"urllib"</span>, <span class="tok-str">"http"</span>, <span class="tok-str">"ftplib"</span>,
+    <span class="tok-str">"smtplib"</span>, <span class="tok-str">"pickle"</span>, <span class="tok-str">"shelve"</span>,
+    <span class="tok-str">"dbm"</span>, <span class="tok-str">"sqlite3"</span>,
+}</code></pre>
+        </div>
+      </div>
+
+      <div class="callout callout-info" style="margin-top: var(--space-6);">
+        <span class="callout-icon">💡</span>
+        <p>The import block is enforced via a <code>__import__</code> hook injected as a preamble into every generated script. The hook checks the <em>caller's</em> <code>__file__</code> — so stdlib modules loading their own transitive deps (e.g. <code>json → re → enum → sys</code>) are allowed through; only direct imports from the user script are blocked.</p>
+      </div>
+    </section>
+
+  </main>
+</div><!-- /.shell -->
+
+<script>
+  /* ── Theme toggle ───────────────────────────────────────────────────── */
+  (function () {
+    const root = document.documentElement;
+    const btn  = document.querySelector('[data-theme-toggle]');
+
+    let theme = root.getAttribute('data-theme') ||
+                (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    root.setAttribute('data-theme', theme);
+    if (btn) updateIcon(btn, theme);
+
+    if (btn) {
+      btn.addEventListener('click', () => {
+        theme = theme === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', theme);
+        updateIcon(btn, theme);
+      });
+    }
+
+    function updateIcon(b, t) {
+      b.setAttribute('aria-label', 'Switch to ' + (t === 'dark' ? 'light' : 'dark') + ' mode');
+      b.innerHTML = t === 'dark'
+        ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+        : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    }
+  })();
+
+  /* ── Method card accordion ──────────────────────────────────────────── */
+  function toggleCard(header) {
+    const card = header.closest('.method-card');
+    card.classList.toggle('open');
+  }
+
+  /* ── Copy code button ───────────────────────────────────────────────── */
+  function copyCode(btn) {
+    const pre = btn.closest('.code-block').querySelector('pre');
+    const text = pre ? pre.innerText : '';
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 1800);
+    }).catch(() => {
+      btn.textContent = 'Failed';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+    });
+  }
+
+  /* ── Sidebar active state on scroll ────────────────────────────────── */
+  (function () {
+    const links    = document.querySelectorAll('.sidebar-link[href^="#"]');
+    const sections = Array.from(links).map(l => document.querySelector(l.getAttribute('href'))).filter(Boolean);
+
+    function onScroll() {
+      let current = sections[0];
+      for (const sec of sections) {
+        if (sec.getBoundingClientRect().top <= 120) current = sec;
+      }
+      links.forEach(l => {
+        l.classList.toggle('active', l.getAttribute('href') === '#' + current.id);
+      });
+    }
+
+    document.querySelector('.main').addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+</body>
+</html>
