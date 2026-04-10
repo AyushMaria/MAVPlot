@@ -1,12 +1,25 @@
 """
 llm/gptPlotCreator.py
 
-Core MAVPlot logic:
-  1. Parse a MAVLink .tlog/.bin/.log file into message-type metadata
-  2. Embed each message type into a persisted ChromaDB vector store
-  3. Use semantic search to find relevant fields for a user query
-  4. Generate a plotting script via an LLM (OpenRouter / GLM-5.1) using an LCEL pipeline
-  5. Execute the script, self-healing up to max_retries times on failure
+Core MAVPose logic — two-phase pipeline:
+
+  Phase 1 — Extraction (headless DB query)
+  -----------------------------------------
+  parse_mavlink_log()    : schema-only scan → builds ChromaDB embeddings
+  extract_dataframes()   : full extraction of relevant message types
+                           → exports a clean Parquet file
+
+  Phase 2 — LLM plot generation
+  -----------------------------------------
+  find_relevant_data_types() : semantic search → relevant msg-type schema
+  create_plot()              : LLM writes pandas+matplotlib script
+                               against the Parquet file
+  run_script()               : executes script; self-heals on failure
+
+The LLM never touches raw binary data.  It receives:
+  - The path of a clean .parquet file
+  - Exact column names, dtypes, and value ranges per message type
+  - The output path for the .png
 """
 
 from __future__ import annotations
@@ -16,37 +29,33 @@ import logging
 import os
 import re
 import subprocess
-from typing import Optional
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from pymavlink import mavutil
+
+from llm.log_extractor import LogExtractor
 
 logger = logging.getLogger(__name__)
 
 VALID_EXTENSIONS = {".tlog", ".bin", ".log"}
 
-# OpenRouter base URL — OpenAI-compatible endpoint
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-
-# Default model — GLM-5.1 on OpenRouter
 DEFAULT_MODEL = "z-ai/glm-5.1"
-
-# Embedding model — OpenRouter proxies OpenAI embeddings
 EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 
 class PlotCreator:
     """
-    Generates Python plotting scripts from MAVLink log files using an LLM
-    served via the OpenRouter API (default: Z.ai GLM-5.1).
+    Two-phase pipeline: extract clean Parquet → LLM writes plotting script.
 
-    Args:
-        max_retries (int): Number of self-healing retries if the generated
-            script fails. Defaults to 3.
+    Parameters
+    ----------
+    max_retries:
+        Number of self-healing retries when the generated script fails.
     """
 
     def __init__(self, max_retries: int = 3) -> None:
@@ -55,15 +64,16 @@ class PlotCreator:
         self.logfile_name: str = ""
         self.script_path: str = ""
         self.plot_path: str = ""
+        self.parquet_path: str = ""
         self.last_code: str = ""
-        self.message_types: dict = {}
+        self.message_types: dict = {}   # schema metadata from schema_only()
         self.db: Optional[Chroma] = None
         self.max_retries: int = max_retries
+        self._extractor: Optional[LogExtractor] = None
 
         api_key: str = os.environ["OPENROUTER_API_KEY"]
         self.model: str = os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
 
-        # Both ChatOpenAI instances point at OpenRouter's OpenAI-compatible endpoint.
         llm = ChatOpenAI(
             model_name=self.model,
             max_tokens=2000,
@@ -72,32 +82,52 @@ class PlotCreator:
             openai_api_base=OPENROUTER_BASE_URL,
         )
 
+        # ------------------------------------------------------------------
+        # Plot-generation prompt
+        # The LLM receives a Parquet path and exact schema — no binary data.
+        # ------------------------------------------------------------------
         plot_prompt = PromptTemplate(
-            input_variables=["data_types", "history", "human_input", "file", "output_file"],
+            input_variables=[
+                "schema", "history", "human_input",
+                "parquet_file", "output_file",
+            ],
             template=(
-                "You are an AI agent that generates Python scripts to plot MAVLink data.\n"
-                "Use matplotlib and pymavlink's mavutil. Do NOT explain the code — return ONLY "
-                "the script inside a markdown ```python``` block.\n"
-                "Plot each independent variable over time in seconds.\n"
-                "Save the plot to {output_file} at >=400 dpi. Do NOT call plt.show().\n"
-                "Use blocking=False in recv_match; break the loop if msg is None.\n\n"
-                "Relevant data types:\n{data_types}\n\n"
+                "You are an expert data-visualisation engineer.\n"
+                "You will be given a Parquet file that contains pre-extracted,"
+                " time-aligned MAVLink telemetry. Your task is to write a\n"
+                "Python script that reads this file with pandas and plots the"
+                " requested data with matplotlib.\n\n"
+                "Rules:\n"
+                "- Read the data with: df = pd.read_parquet('{parquet_file}')\n"
+                "- Filter rows by msg_type when needed, e.g.:\n"
+                "    df_gps = df[df['msg_type'] == 'GLOBAL_POSITION_INT']\n"
+                "- The 'time_s' column is always float64 seconds from log start.\n"
+                "- Plot each independent variable over time_s on its own axis or subplot.\n"
+                "- Save the figure to '{output_file}' at dpi=400. Do NOT call plt.show().\n"
+                "- Return ONLY the script inside a markdown ```python``` block.\n"
+                "- Do NOT import pymavlink, subprocess, os, sys, or socket.\n\n"
+                "Available data schema (msg_type → columns with dtype and range):\n"
+                "{schema}\n\n"
                 "Chat history:\n{history}\n\n"
-                "HUMAN: {human_input}\n\n"
-                "Read data from: {file}"
+                "HUMAN: {human_input}"
             ),
         )
         self._plot_chain = plot_prompt | llm | StrOutputParser()
 
+        # ------------------------------------------------------------------
+        # Fix prompt — also operates on the Parquet / pandas context
+        # ------------------------------------------------------------------
         fix_prompt = PromptTemplate(
-            input_variables=["data_types", "error", "script"],
+            input_variables=["schema", "error", "script", "parquet_file"],
             template=(
-                "You are an AI agent that debugs MAVLink plotting scripts.\n"
-                "The following script produced an error.\n\n"
-                "Script:\n{script}\n\n"
+                "You are debugging a pandas + matplotlib script that reads"
+                " MAVLink telemetry from a Parquet file.\n\n"
+                "Parquet file: {parquet_file}\n"
+                "Schema:\n{schema}\n\n"
+                "Failing script:\n{script}\n\n"
                 "Error:\n{error}\n\n"
-                "Relevant message definitions:\n{data_types}\n\n"
-                "Return ONLY the fixed script in a markdown ```python``` block."
+                "Fix the script. Return ONLY the corrected script in a"
+                " markdown ```python``` block."
             ),
         )
         fix_llm = ChatOpenAI(
@@ -116,8 +146,7 @@ class PlotCreator:
     @staticmethod
     def extract_code_snippets(text: str) -> list:
         """
-        Extract fenced code blocks from *text*.
-
+        Extract fenced ```python``` blocks from *text*.
         Falls back to returning [text] when no fences are found.
         """
         snippets = re.findall(r"```.*?\n(.*?)```", text, re.DOTALL | re.MULTILINE)
@@ -141,53 +170,66 @@ class PlotCreator:
                 f"Unsupported file type '{ext}'. "
                 f"Expected one of: {', '.join(sorted(VALID_EXTENSIONS))}"
             )
-        path = os.path.dirname(filename)
+        base_dir = os.path.dirname(os.path.abspath(filename))
         self.logfile_name = filename
-        self.script_path = os.path.join(path, "plot.py")
-        self.plot_path = os.path.join(path, "plot.png")
+        self.script_path = os.path.join(base_dir, "plot.py")
+        self.plot_path = os.path.join(base_dir, "plot.png")
+        self.parquet_path = os.path.join(base_dir, "telemetry.parquet")
+        self._extractor = LogExtractor(filename)
 
     # ------------------------------------------------------------------
-    # Log parsing
+    # Phase 1a — schema scan + embeddings
     # ------------------------------------------------------------------
 
     def parse_mavlink_log(self) -> str:
         """
-        Parse the MAVLink log and build a persisted ChromaDB vector store.
+        Schema-only scan: collect message-type metadata and build the
+        ChromaDB vector index used for semantic field search.
 
-        Returns:
-            JSON string of all discovered message types and their fields.
+        Returns
+        -------
+        JSON string of all discovered message types and their fields.
         """
         if not self.logfile_name:
             raise RuntimeError("No log file set. Call set_logfile_name() first.")
 
-        self.message_types = {}
-        mav_log = mavutil.mavlink_connection(self.logfile_name)
-
-        while True:
-            try:
-                msg = mav_log.recv_match(blocking=False, type=None)
-                if msg is None:
-                    break
-                msg_type = msg.get_type()
-                if msg_type not in self.message_types:
-                    self.message_types[msg_type] = {
-                        "count": 1,
-                        "fields": {
-                            field: type(getattr(msg, field)).__name__
-                            for field in msg.get_fieldnames()
-                        },
-                    }
-                else:
-                    self.message_types[msg_type]["count"] += 1
-            except KeyboardInterrupt:
-                logger.info("Log parsing interrupted by user.")
-                break
-            except Exception as exc:
-                logger.warning("Error reading MAVLink message: %s", exc)
-                break
-
+        self.message_types = self._extractor.schema_only()
         self._create_embeddings(self.message_types)
         return json.dumps(self.message_types, indent=4)
+
+    # ------------------------------------------------------------------
+    # Phase 1b — full extraction → Parquet
+    # ------------------------------------------------------------------
+
+    def extract_dataframes(
+        self,
+        msg_types: List[str],
+    ) -> Dict[str, dict]:
+        """
+        Run the full extraction for the given message types and export a
+        clean, time-aligned Parquet file.
+
+        This is the "headless DB query" step.  The parent process
+        (cli.py) calls this after find_relevant_data_types() resolves
+        which message types are needed, and before invoking the LLM.
+
+        Parameters
+        ----------
+        msg_types:
+            List of MAVLink message type names identified as relevant.
+
+        Returns
+        -------
+        Schema summary dict (msg_type → rows/columns/dtype/min/max)
+        suitable for direct injection into the LLM prompt.
+        """
+        if not self._extractor:
+            raise RuntimeError("Call set_logfile_name() first.")
+
+        logger.info("Running full extraction for types: %s", msg_types)
+        self._extractor.extract_all()
+        schema_summary = self._extractor.export_parquet(msg_types, self.parquet_path)
+        return schema_summary
 
     # ------------------------------------------------------------------
     # Embeddings
@@ -196,7 +238,7 @@ class PlotCreator:
     def _create_embeddings(self, message_types: dict) -> None:
         """
         Embed each message type into a persisted ChromaDB collection
-        using OpenRouter's OpenAI-compatible embeddings endpoint.
+        using OpenRouter’s OpenAI-compatible embeddings endpoint.
         """
         texts = [json.dumps({mt: message_types[mt]}) for mt in message_types]
         logger.info("Creating embeddings for %d message types.", len(texts))
@@ -206,9 +248,8 @@ class PlotCreator:
             openai_api_key=os.environ["OPENROUTER_API_KEY"],
             openai_api_base=OPENROUTER_BASE_URL,
         )
-
         persist_dir = os.path.join(
-            os.path.dirname(self.logfile_name), "chroma_db"
+            os.path.dirname(os.path.abspath(self.logfile_name)), "chroma_db"
         )
         self.db = Chroma.from_texts(
             texts,
@@ -221,26 +262,61 @@ class PlotCreator:
     # Semantic search
     # ------------------------------------------------------------------
 
-    def find_relevant_data_types(self, human_input: str) -> str:
-        """Return a text block of message-type JSON most relevant to *human_input*."""
+    def find_relevant_data_types(self, human_input: str) -> List[str]:
+        """
+        Semantic similarity search against the ChromaDB vector store.
+
+        Returns
+        -------
+        List of MAVLink message type names most relevant to *human_input*.
+        """
         if self.db is None:
             raise RuntimeError("Vector store not initialised. Call parse_mavlink_log() first.")
         docs = self.db.similarity_search(human_input)
-        return "\n\n".join(doc.page_content for doc in docs)
+        # Each document was stored as JSON of a single message type dict;
+        # parse back to extract the type name.
+        types: List[str] = []
+        for doc in docs:
+            try:
+                obj = json.loads(doc.page_content)
+                types.extend(obj.keys())
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        return list(dict.fromkeys(types))  # deduplicate, preserve order
 
     # ------------------------------------------------------------------
-    # Plot generation
+    # Phase 2 — LLM plot generation
     # ------------------------------------------------------------------
 
-    def create_plot(self, human_input: str, data_type_info_text: str) -> str:
-        """Ask the LLM to write a plotting script and save it to disk."""
+    def create_plot(
+        self,
+        human_input: str,
+        schema_summary: Dict[str, dict],
+    ) -> str:
+        """
+        Ask the LLM to write a pandas + matplotlib plotting script
+        against the exported Parquet file.
+
+        Parameters
+        ----------
+        human_input:
+            The user’s natural-language plot request.
+        schema_summary:
+            Dict returned by extract_dataframes() — msg_type →
+            {rows, columns: {col: {dtype, min, max}}}.
+
+        Returns
+        -------
+        The generated script as a string (also written to disk).
+        """
         history = (
             f"\n\nLast script generated:\n\n{self.last_code}" if self.last_code else ""
         )
+        schema_text = json.dumps(schema_summary, indent=2)
         response = self._plot_chain.invoke({
-            "data_types": data_type_info_text,
+            "schema": schema_text,
             "history": history,
-            "file": self.logfile_name,
+            "parquet_file": self.parquet_path,
             "human_input": human_input,
             "output_file": self.plot_path,
         })
@@ -256,20 +332,48 @@ class PlotCreator:
 
     def attempt_to_fix_script(self, error_message: str) -> str:
         """
-        Ask the LLM to fix the last failing script.
+        Feed the error back to the LLM and rewrite the failing script.
 
-        Args:
-            error_message: The stderr/exception text from the failed run.
+        Parameters
+        ----------
+        error_message:
+            The stderr / exception text from the failed run.
 
-        Returns:
-            The fixed (or best-effort) script as a string.
+        Returns
+        -------
+        The fixed (or best-effort) script as a string.
         """
         with open(self.script_path, "r") as fh:
             script = fh.read()
 
+        # Rebuild schema summary from cached extractor frames
+        schema_text = "{}"
+        if self._extractor and self._extractor.frames:
+            try:
+                # Lightweight re-summary from already-extracted frames
+                summary: Dict[str, dict] = {}
+                for mt, df in self._extractor.frames.items():
+                    cols = {}
+                    for col in df.columns:
+                        import pandas as pd  # local import to avoid top-level dependency
+                        dtype = str(df[col].dtype)
+                        if pd.api.types.is_numeric_dtype(df[col]):
+                            cols[col] = {
+                                "dtype": dtype,
+                                "min": round(float(df[col].min()), 6),
+                                "max": round(float(df[col].max()), 6),
+                            }
+                        else:
+                            cols[col] = {"dtype": dtype}
+                    summary[mt] = {"rows": len(df), "columns": cols}
+                schema_text = json.dumps(summary, indent=2)
+            except Exception as exc:
+                logger.warning("Could not rebuild schema for fix prompt: %s", exc)
+
         try:
             response = self._fix_chain.invoke({
-                "data_types": json.dumps(self.message_types, indent=2),
+                "schema": schema_text,
+                "parquet_file": self.parquet_path,
                 "error": error_message,
                 "script": script,
             })
@@ -286,10 +390,11 @@ class PlotCreator:
         """
         Execute the generated plot script.
 
-        On failure, self-heals up to self.max_retries times.
+        Self-heals up to self.max_retries times on failure.
 
-        Returns:
-            ([(None, (plot_path,))], last_code)
+        Returns
+        -------
+        ([(None, (plot_path,))], last_code)
         """
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -301,7 +406,8 @@ class PlotCreator:
             except subprocess.CalledProcessError as exc:
                 error_text = exc.output.decode(errors="replace")
                 logger.warning(
-                    "Script attempt %d/%d failed:\n%s", attempt, self.max_retries, error_text
+                    "Script attempt %d/%d failed:\n%s",
+                    attempt, self.max_retries, error_text,
                 )
                 if attempt < self.max_retries:
                     self.last_code = self.attempt_to_fix_script(error_text)

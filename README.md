@@ -14,56 +14,94 @@
 
 ---
 
-MAVPose is a headless CLI tool that turns a natural language prompt into a matplotlib plot of your MAVLink flight log. Under the hood it uses an LLM (default: **Z.ai GLM-5.1** via OpenRouter), ChromaDB semantic search, and a sandboxed Python executor with self-healing retry logic.
+MAVPose is a headless CLI tool that turns a natural language prompt into a matplotlib plot of your MAVLink flight log. It runs a **two-phase pipeline**: the parent process first extracts clean, time-aligned telemetry into a Parquet file (like a headless database query), then hands the LLM a precise column schema and a `pd.read_parquet()` call — no raw binary data, no pymavlink in the generated script. This drastically reduces hallucinations and self-healing loops.
 
 ```
 $ python cli.py flight.tlog --prompt "Plot altitude over time"
 
-📂 Parsing log file: flight.tlog
-✅ Log parsed and vector index built.
+📂 Parsing log schema: flight.tlog
+✅ Schema indexed.
 
-🔍 Finding relevant data types for: 'Plot altitude over time'
-✍️  Generating plot script with GLM-5.1...
+🔍 Finding relevant message types for: 'Plot altitude over time'
+   → ['GLOBAL_POSITION_INT', 'VFR_HUD']
+
+🗃️  Extracting telemetry to Parquet...
+┌──────────────────────────────────────────────────────────┐
+│  🗃️  Extracted Parquet schema                               │
+├──────────────────────────────────────────────────────────┤
+│  [GLOBAL_POSITION_INT]  1842 rows                          │
+│      time_s: float64  [0.0 … 312.4]                       │
+│      alt: float64  [487320 … 512100]                      │
+│  [VFR_HUD]  1842 rows                                      │
+│      time_s: float64  [0.0 … 312.4]                       │
+│      alt: float64  [476.1 … 501.3]                        │
+└──────────────────────────────────────────────────────────┘
+   Saved → /path/to/telemetry.parquet
+
+✍️  Generating plot script with z-ai/glm-5.1...
 ⚙️  Running script...
-✅ Plot saved to: plot.png
+✅ Plot saved to: /path/to/plot.png
 ```
 
 ---
 
-## How It Works
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  cli.py                                                     │
+┌──────────────────────────────────────────────────────────┐
+│  PHASE 1 — Extraction  (parent process, no LLM)             │
+├──────────────────────────────────────────────────────────┤
 │                                                             │
-│  1.  validate_mavlink_file()   ← extension / size / symlink │
-│  2.  parse_mavlink_log()       ← pymavlink reads all msgs   │
-│  3.  _create_embeddings()      ← ChromaDB vector store      │
+│  LogExtractor.schema_only()                                 │
+│    └─ pymavlink fast scan → {msg_type: {fields, count}}     │
+│    └─ ChromaDB embeddings (semantic field search)           │
 │                                                             │
-│  4.  find_relevant_data_types() ← semantic search           │
-│  5.  create_plot()              ← LLM writes the script     │
-│  6.  run_script()               ← subprocess + sandbox      │
-│       └─ attempt_to_fix_script() on failure (up to N×)      │
+│  find_relevant_data_types(prompt)                           │
+│    └─ vector similarity → ["GLOBAL_POSITION_INT", ...]      │
 │                                                             │
-│  → plot.png saved next to your log file                     │
-└─────────────────────────────────────────────────────────────┘
+│  LogExtractor.extract_all()  ←  full row materialisation    │
+│    └─ per-msg-type DataFrames, time_s column, cast numerics │
+│                                                             │
+│  LogExtractor.export_parquet(msg_types, path)               │
+│    └─ clean telemetry.parquet + schema summary dict         │
+│                                                             │
+├──────────────────────────────────────────────────────────┤
+│  PHASE 2 — LLM Plot Generation                              │
+├──────────────────────────────────────────────────────────┤
+│                                                             │
+│  LLM receives:                                              │
+│    └─ parquet_file path                                    │
+│    └─ schema: {msg_type: {rows, columns: {col: dtype+range}}} │
+│    └─ output_file path (.png)                              │
+│                                                             │
+│  LLM writes pandas + matplotlib script                      │
+│    df = pd.read_parquet(parquet_file)                       │
+│    df_x = df[df['msg_type'] == 'X']                         │
+│    ...                                                      │
+│                                                             │
+│  run_script() → subprocess exec                            │
+│    └─ on failure: attempt_to_fix_script() up to N×         │
+│                                                             │
+│  → plot.png saved next to log file                          │
+└──────────────────────────────────────────────────────────┘
 ```
 
-When the generated script fails, MAVPose feeds the error back to the LLM and retries automatically (default: **3 retries**, configurable via `--retries`).
+**Why this matters:** In the old design, the LLM had to write `pymavlink` code to parse a binary `.tlog` — a notoriously tricky API with blocking/non-blocking subtleties, timestamp inconsistencies, and message-type guesswork. By the time the LLM touched the data, it was flying blind. Now it receives a typed, time-aligned Parquet file with exact column names, dtypes, and value ranges. Writing `pd.read_parquet()` + `matplotlib` code against a known schema is trivially reliable.
 
 ---
 
 ## Features
 
 - **Plain-English plots** — describe any flight data; MAVPose figures out which MAVLink fields to use
-- **Automatic log parsing** — discovers every message type and field present in your `.tlog` / `.bin` / `.log`
-- **Semantic field search** — vector embeddings surface the most relevant message types for your query
-- **Self-healing scripts** — LLM debugs and rewrites failing scripts up to N times automatically
+- **Headless extraction layer** — `LogExtractor` parses the log into per-message-type DataFrames with a monotonic `time_s` index before the LLM is ever invoked
+- **Clean Parquet handoff** — only the relevant message types are exported; the LLM sees exact column names, dtypes, min/max ranges — no binary guesswork
+- **Semantic field search** — ChromaDB vector embeddings surface the most relevant message types for your query
+- **Self-healing scripts** — LLM debugs and rewrites failing scripts up to N times; fix prompt also includes the full schema
 - **Sandboxed execution** — generated code runs in an isolated subprocess with a blocked-import denylist and a 30 s timeout
-- **Interactive REPL mode** — omit `--prompt` to enter a live loop and plot multiple things in one session
+- **Interactive REPL mode** — omit `--prompt` to enter a live loop; Parquet is re-extracted per query with the relevant types
 - **Configurable model** — drop in any OpenRouter model with a one-line `.env` change
 - **Persisted vector store** — ChromaDB is saved to disk; re-running on the same log skips re-embedding
-- **CI-tested** — lint (ruff) and pytest run on every push via GitHub Actions
+- **CI-tested** — lint (ruff) and pytest run on every push
 
 ---
 
@@ -75,8 +113,9 @@ When the generated script fails, MAVPose feeds the error back to the LLM and ret
 | Embeddings | OpenRouter → `openai/text-embedding-3-small` |
 | LLM framework | LangChain (LCEL) — `langchain-openai`, `langchain-chroma` |
 | Vector store | ChromaDB ≥ 0.5 (persisted to disk) |
+| Extraction layer | pandas ≥ 2.0 + pyarrow ≥ 14.0 |
 | Drone log parsing | pymavlink 2.4.37 |
-| Plotting | matplotlib 3.7.1 |
+| Plotting | matplotlib 3.7.1 (in generated script) |
 | Sandbox | Custom subprocess executor with import denylist + timeout |
 | Config | python-dotenv |
 | Lint / CI | ruff + pytest + GitHub Actions |
@@ -142,7 +181,7 @@ python cli.py flight.tlog
 ### All CLI flags
 
 ```
-usage: mavplot [-h] [--prompt PROMPT] [--retries N] [--verbose] log_file
+usage: mavpose [-h] [--prompt PROMPT] [--retries N] [--verbose] log_file
 
 positional arguments:
   log_file              Path to a MAVLink log file (.tlog, .bin, .log)
@@ -153,10 +192,21 @@ options:
   -v, --verbose         Enable debug logging
 ```
 
-The output plot is saved as `plot.png` in the same directory as your log file.
+The output plot is saved as `plot.png`, and intermediate telemetry as `telemetry.parquet`, both in the same directory as your log file.
 
 > **Need a sample log file?**  
 > [Download here](https://drive.google.com/file/d/1BKv-NbSvYQz9XqqmyOyOhe3o4PAFDyZa/view?usp=sharing)
+
+---
+
+## Output Files
+
+| File | Description |
+|---|---|
+| `telemetry.parquet` | Extracted, time-aligned telemetry for the relevant message types |
+| `plot.py` | The LLM-generated pandas + matplotlib script |
+| `plot.png` | The final plot at 400 dpi |
+| `chroma_db/` | Persisted ChromaDB vector store (git-ignored) |
 
 ---
 
@@ -169,7 +219,7 @@ MAVPose routes through [OpenRouter](https://openrouter.ai/models), so any model 
 OPENROUTER_MODEL=z-ai/glm-5.1          # default — long-horizon agentic coding
 OPENROUTER_MODEL=z-ai/glm-5            # flagship, complex systems
 OPENROUTER_MODEL=z-ai/glm-5-turbo      # fast inference
-OPENROUTER_MODEL=z-ai/glm-4.5         # MoE, 355B params, switchable reasoning
+OPENROUTER_MODEL=z-ai/glm-4.5          # MoE, 355B params, switchable reasoning
 
 # OpenAI fallback
 OPENROUTER_MODEL=openai/gpt-4o
@@ -181,64 +231,69 @@ OPENROUTER_MODEL=openai/gpt-4o
 
 ```
 MAVPose/
-├── cli.py                         # CLI entry point — argument parsing, REPL loop
-├── app.py                         # Legacy stub (Gradio UI removed — see note below)
+├── cli.py                         # CLI entry point — two-phase orchestration
+├── app.py                         # Legacy stub (Gradio UI removed)
 ├── llm/
-│   ├── gptPlotCreator.py          # PlotCreator — core LLM + plotting pipeline
+│   ├── log_extractor.py           # 🆕 Headless extraction layer (LogExtractor)
+│   ├── gptPlotCreator.py          # PlotCreator — orchestrates both phases
 │   ├── safe_executor.py           # Subprocess sandbox with import denylist
 │   └── file_validator.py          # File validation (extension, size, symlink)
 ├── tests/
+│   ├── test_log_extractor.py      # 🆕 Unit tests for LogExtractor
 │   ├── test_extract_code_snippets.py
 │   ├── test_file_validator.py
 │   └── test_safe_executor.py
 ├── .github/workflows/ci.yml       # GitHub Actions: ruff lint + pytest
 ├── docs/
-│   └── GPT_MAVPlot_Arch.png       # Architecture diagram
+│   └── GPT_MAVPlot_Arch.png
 ├── target/                        # Output directory for plot.py and plot.png
-├── template.env                   # Environment variable template
+├── template.env
 ├── requirements.txt
 └── LICENSE
 ```
 
-> **Note on `app.py`:** The Gradio web UI was removed in favour of the headless CLI. `app.py` is kept as a stub that prints a helpful error if invoked directly.
-
 ---
 
-## Core API — `PlotCreator`
+## Core API — `LogExtractor`
 
-All logic lives in `llm/gptPlotCreator.py`. You can use it programmatically:
+```python
+from llm.log_extractor import LogExtractor
+
+extractor = LogExtractor("flight.tlog")
+
+# Fast schema scan (no DataFrame allocation)
+schema = extractor.schema_only()
+# {"GLOBAL_POSITION_INT": {"count": 1842, "fields": {"lat": "int", ...}}, ...}
+
+# Full extraction into DataFrames
+frames = extractor.extract_all()
+# {"GLOBAL_POSITION_INT": pd.DataFrame([time_s, msg_type, lat, lon, alt, ...]), ...}
+
+# Export to Parquet and get schema summary for the LLM
+summary = extractor.export_parquet(["GLOBAL_POSITION_INT", "VFR_HUD"], "telemetry.parquet")
+# {"GLOBAL_POSITION_INT": {"rows": 1842, "columns": {"time_s": {"dtype": "float64", "min": 0.0, "max": 312.4}, ...}}}
+```
+
+## Core API — `PlotCreator`
 
 ```python
 from llm.gptPlotCreator import PlotCreator
 
 creator = PlotCreator(max_retries=3)
 creator.set_logfile_name("flight.tlog")
+
+# Phase 1a: schema scan + embeddings
 creator.parse_mavlink_log()
 
-data_types = creator.find_relevant_data_types("Plot altitude over time")
-creator.create_plot("Plot altitude over time", data_types)
+# Phase 1b: semantic search + Parquet extraction
+msg_types = creator.find_relevant_data_types("Plot altitude over time")
+schema_summary = creator.extract_dataframes(msg_types)
+
+# Phase 2: LLM writes + executes the script
+creator.create_plot("Plot altitude over time", schema_summary)
 result, code = creator.run_script()
-# → plot saved to flight_dir/plot.png
+# → plot.png and telemetry.parquet saved next to the log file
 ```
-
-| Method | What it does |
-|---|---|
-| `set_logfile_name(path)` | Registers the log file; derives `plot.py` and `plot.png` output paths |
-| `parse_mavlink_log()` | Reads all MAVLink message types and fields; builds the ChromaDB index |
-| `find_relevant_data_types(query)` | Semantic search — returns the most relevant message-type JSON for a query |
-| `create_plot(query, data_types)` | Calls the LLM (LCEL pipeline) to write and save a plotting script |
-| `run_script()` | Executes the script; calls `attempt_to_fix_script()` on failure |
-| `attempt_to_fix_script(error)` | Feeds the error back to the LLM and rewrites the script |
-
----
-
-## Sandbox Security
-
-Generated scripts run in an isolated subprocess (`safe_executor.py`) with:
-
-- **Import denylist** — blocks `os`, `subprocess`, `socket`, `urllib`, `pickle`, and ~20 other dangerous modules from being imported *by the generated script itself*. Transitive stdlib imports are allowed through.
-- **30 s timeout** — the subprocess is killed if it runs too long.
-- **No RestrictedPython** — the approach uses a custom `__import__` hook injected at runtime, which is lighter and avoids the compatibility issues of RestrictedPython.
 
 ---
 
@@ -261,10 +316,11 @@ ruff check llm/ cli.py
 | Issue | Cause | Fix |
 |---|---|---|
 | `KeyError: OPENROUTER_API_KEY` | `.env` not configured | Copy `template.env` to `.env` and add your key |
-| `ModuleNotFoundError` | Missing dependency | Run `pip install -r requirements.txt` in your venv |
+| `ModuleNotFoundError: pandas` | Missing dependency | Run `pip install -r requirements.txt` |
+| `ModuleNotFoundError: pyarrow` | Missing dependency | Run `pip install -r requirements.txt` |
 | Plot not generated after N retries | LLM script failed repeatedly | Try a more specific prompt; use `--verbose` to inspect errors |
 | `FileValidationError` | Wrong file type or empty file | Only `.tlog`, `.bin`, `.log` files ≤ 200 MB are accepted |
-| `FileValidationError: Symlink not allowed` | Symlink passed as log path | Provide the real file path, not a symlink |
+| `ValueError: None of the requested message types were found` | Semantic search returned types not in log | Use `--verbose` to see what types the log actually contains |
 | ChromaDB version conflict | Stale venv | Delete `venv/` and reinstall with a fresh `pip install -r requirements.txt` |
 
 ---

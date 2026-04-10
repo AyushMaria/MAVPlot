@@ -2,7 +2,18 @@
 """
 cli.py
 
-Headless CLI entry point for MAVPlot.  (#1)
+Headless CLI entry point for MAVPose.
+
+Two-phase pipeline
+------------------
+  Phase 1 — Extraction
+    parse_mavlink_log()   : schema scan + ChromaDB embeddings
+    find_relevant_data_types() : semantic search → message type names
+    extract_dataframes()  : full extraction → clean telemetry.parquet
+
+  Phase 2 — LLM plot generation
+    create_plot()         : LLM writes pandas + matplotlib script
+    run_script()          : executes script; self-heals on failure
 
 Usage:
     python cli.py <log_file> [options]
@@ -10,10 +21,11 @@ Usage:
 Examples:
     python cli.py flight.tlog --prompt "Plot altitude over time"
     python cli.py flight.tlog --prompt "Show battery voltage" --retries 5
-    python cli.py flight.tlog  # interactive prompt mode
+    python cli.py flight.tlog           # interactive prompt mode
 """
 
 import argparse
+import json
 import logging
 import sys
 
@@ -31,8 +43,8 @@ def configure_logging(verbose: bool) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="mavplot",
-        description="MAVPlot — natural language drone flight log visualiser (headless CLI)",
+        prog="mavpose",
+        description="MAVPose — natural language drone flight log visualiser",
     )
     p.add_argument(
         "log_file",
@@ -58,14 +70,43 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _print_parquet_summary(schema_summary: dict) -> None:
+    """Pretty-print the Parquet schema summary to stdout."""
+    print("\n┌" + "─" * 58 + "┐")
+    print("│  🗃️  Extracted Parquet schema" + " " * 31 + "│")
+    print("├" + "─" * 58 + "┤")
+    for mt, info in schema_summary.items():
+        print(f"│  [{mt}]  {info['rows']} rows" + " " * max(0, 40 - len(mt) - len(str(info['rows']))) + "│")
+        for col, meta in info["columns"].items():
+            if "min" in meta:
+                line = f"│      {col}: {meta['dtype']}  [{meta['min']} … {meta['max']}]"
+            else:
+                line = f"│      {col}: {meta['dtype']}"
+            # Pad / truncate to fit box width
+            line = line[:59].ljust(59) + "│"
+            print(line)
+    print("└" + "─" * 58 + "┘")
+
+
 def run_once(creator: PlotCreator, prompt: str) -> None:
-    """Execute one plot request and print the result path."""
-    print(f"\n🔍 Finding relevant data types for: '{prompt}'")
-    data_types = creator.find_relevant_data_types(prompt)
+    """Execute one plot request end-to-end."""
 
-    print("✍️  Generating plot script with GPT...")
-    creator.create_plot(prompt, data_types)
+    # --- Phase 1: semantic search ---
+    print(f"\n🔍 Finding relevant message types for: '{prompt}'")
+    msg_types = creator.find_relevant_data_types(prompt)
+    print(f"   → {msg_types}")
 
+    # --- Phase 1b: headless extraction → Parquet ---
+    print("\n🗃️  Extracting telemetry to Parquet...")
+    schema_summary = creator.extract_dataframes(msg_types)
+    _print_parquet_summary(schema_summary)
+    print(f"   Saved → {creator.parquet_path}")
+
+    # --- Phase 2: LLM writes the script ---
+    print(f"\n✍️  Generating plot script with {creator.model}...")
+    creator.create_plot(prompt, schema_summary)
+
+    # --- Execute ---
     print("⚙️  Running script...")
     plot_result, code = creator.run_script()
 
@@ -75,11 +116,10 @@ def run_once(creator: PlotCreator, prompt: str) -> None:
     print(code)
     print("─" * 60)
 
-    plot_path = creator.plot_path
-    if plot_path:
-        print(f"\n✅ Plot saved to: {plot_path}")
+    if creator.plot_path:
+        print(f"\n✅ Plot saved to: {creator.plot_path}")
     else:
-        print("\n⚠️  Plot file not found — check the generated code above for errors.")
+        print("\n⚠️  Plot file not found — check the generated code above.")
 
 
 def interactive_mode(creator: PlotCreator) -> None:
@@ -107,28 +147,25 @@ def main() -> None:
     args = parser.parse_args()
 
     configure_logging(args.verbose)
-    log = logging.getLogger("mavplot.cli")
+    log = logging.getLogger("mavpose.cli")
 
-    # Initialise PlotCreator
     creator = PlotCreator(max_retries=args.retries)
 
-    # Validate and register log file  (#9 handled inside set_logfile_name)
     try:
         creator.set_logfile_name(args.log_file)
     except ValueError as exc:
         log.error("%s", exc)
         sys.exit(1)
 
-    # Parse log and build vector index
-    print(f"\n📂 Parsing log file: {args.log_file}")
+    # Phase 1a: schema scan + embeddings (fast, no DataFrame allocation)
+    print(f"\n📂 Parsing log schema: {args.log_file}")
     try:
         creator.parse_mavlink_log()
     except Exception as exc:
         log.error("Failed to parse log file: %s", exc)
         sys.exit(1)
-    print("✅ Log parsed and vector index built.\n")
+    print("✅ Schema indexed.\n")
 
-    # Single prompt or interactive mode
     if args.prompt:
         try:
             run_once(creator, args.prompt)
