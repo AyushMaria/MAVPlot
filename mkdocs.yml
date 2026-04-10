@@ -1,0 +1,39 @@
+site_name: MAVPose
+site_description: LLM-powered MAVLink flight log analysis
+site_url: https://ayushmaria.github.io/MAVPose/
+repo_url: https://github.com/AyushMaria/MAVPose
+repo_name: AyushMaria/MAVPose
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.instant
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]          # ← tells it where to find the mavpose/ package
+          options:
+            show_source: true
+            docstring_style: numpy   # change to "google" if your docstrings use that style
+
+nav:
+  - Home: index.md
+  - API Reference:
+    - LogExtractor: api/log_extractor.md
+    - PlotCreator: api/plot_creator.md
+    - FileValidator: api/file_validator.md
+    - SafeExecutor: api/safe_executor.md
