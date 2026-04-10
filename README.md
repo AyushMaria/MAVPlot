@@ -1,8 +1,10 @@
-# MAVPlot
+# MavPose
 
 **A GPT-powered chatbot that turns natural language into drone flight plots.**
 
-Upload a MAVLink `.tlog` file, describe the data you want to visualise, and MAVPlot will write a Python script using `pymavlink` + `matplotlib`, execute it in a **sandboxed environment**, and display the resulting plot — all inside a Gradio chat interface.
+Upload a MAVLink `.tlog` file, describe the data you want to visualise, and MavPose will write a Python script using `pymavlink` + `matplotlib`, execute it in a **sandboxed environment**, and display the resulting plot — all inside a Gradio chat interface.
+
+> 🧭 *Inspired by the Log Pose from One Piece — it locks onto your flight data and charts a course through it.*
 
 ![Architecture Diagram](docs/GPT_MAVPlot_Arch.png)
 
@@ -70,7 +72,7 @@ If the generated script throws an error, `attempt_to_fix_script()` feeds the err
 ## Project Structure
 
 ```
-MAVPlot/
+MavPose/
 ├── app.py                      # Gradio 4.x UI and chat event handlers
 ├── llm/
 │   ├── gptPlotCreator.py       # PlotCreator — core LLM + plotting logic (LCEL)
@@ -105,8 +107,8 @@ MAVPlot/
 
 **1. Clone the repo**
 ```bash
-git clone https://github.com/AyushMaria/MAVPlot.git
-cd MAVPlot
+git clone https://github.com/AyushMaria/MavPose.git
+cd MavPose
 ```
 
 **2. Create and activate a virtual environment**
@@ -151,12 +153,12 @@ Open the Gradio URL shown in the terminal (usually `http://127.0.0.1:7860`).
 ## Usage
 
 1. Click **📁** and upload a MAVLink `.tlog`, `.bin`, or `.log` file
-2. Wait for the progress bar — MAVPlot parses the log and builds a vector index
+2. Wait for the progress bar — MavPose parses the log and builds a vector index
 3. Type a plot request, for example:
    - `Plot altitude over time`
    - `Show GPS latitude and longitude`
    - `Plot battery voltage and current`
-4. MAVPlot will find relevant fields, generate a script, run it in a sandbox, and show the plot + code
+4. MavPose will find relevant fields, generate a script, run it in a sandbox, and show the plot + code
 5. Click **🔄 Reset session** to start fresh with a new log file
 
 > **Need a sample log file?**  
