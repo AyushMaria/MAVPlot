@@ -29,7 +29,7 @@ import argparse
 import logging
 import sys
 
-from llm.PlotCreator import PlotCreator
+from mavpose.PlotCreator import PlotCreator
 
 
 def configure_logging(verbose: bool) -> None:

@@ -1,7 +1,7 @@
 """
 tests/test_log_extractor.py
 
-Unit tests for llm/log_extractor.py.
+Unit tests for mavpose/log_extractor.py.
 
 Because we cannot ship a real MAVLink binary in the test suite, all
 tests that exercise extraction logic use monkeypatching to inject a
@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from llm.log_extractor import LogExtractor, _to_float, _timestamp_us
+from mavpose.log_extractor import LogExtractor, _to_float, _timestamp_us
 
 
 # ---------------------------------------------------------------------------

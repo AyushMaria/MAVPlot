@@ -1,5 +1,5 @@
 """
-llm/gptPlotCreator.py
+mavpose/PlotCreator.py
 
 Core MAVPose logic — two-phase pipeline:
 
@@ -38,7 +38,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from llm.log_extractor import LogExtractor
+from mavpose.log_extractor import LogExtractor
 
 logger = logging.getLogger(__name__)
 

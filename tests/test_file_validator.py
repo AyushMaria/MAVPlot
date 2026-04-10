@@ -8,7 +8,7 @@ Uses tmp_path (pytest fixture) to create real temporary files.
 import os
 import sys
 import pytest
-from llm.file_validator import validate_mavlink_file, FileValidationError
+from mavpose.file_validator import validate_mavlink_file, FileValidationError
 
 
 def _can_symlink(tmp_path) -> bool:

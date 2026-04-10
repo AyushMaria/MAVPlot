@@ -6,7 +6,7 @@ This is a pure static method with no LLM or file I/O — safe to test without mo
 """
 
 import pytest
-from llm.PlotCreator import PlotCreator
+from mavpose.PlotCreator import PlotCreator
 
 
 class TestExtractCodeSnippets:

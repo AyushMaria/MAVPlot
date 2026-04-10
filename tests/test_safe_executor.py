@@ -7,7 +7,7 @@ and blocks dangerous imports and operations.
 """
 
 import pytest
-from llm.safe_executor import execute_script
+from mavpose.safe_executor import execute_script
 
 
 class TestExecuteScript:

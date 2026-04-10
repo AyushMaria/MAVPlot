@@ -1,5 +1,5 @@
 """
-llm/log_extractor.py
+mavpose/log_extractor.py
 
 Headless database-query layer for MAVLink flight logs.
 

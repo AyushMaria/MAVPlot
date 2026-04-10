@@ -1,5 +1,5 @@
 """
-llm/file_validator.py
+mavpose/file_validator.py
 
 Validates a MAVLink log file before it is passed to PlotCreator.
 

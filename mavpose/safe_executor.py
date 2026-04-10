@@ -1,5 +1,5 @@
 """
-llm/safe_executor.py
+mavpose/safe_executor.py
 
 Sandboxed execution of GPT-generated Python plotting scripts.
 
