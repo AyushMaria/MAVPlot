@@ -9,6 +9,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/AyushMaria/MAVPose/actions/workflows/ci.yml/badge.svg)](https://github.com/AyushMaria/MAVPose/actions/workflows/ci.yml)
+[![PyPI version](https://badge.fury.io/py/mavpose.svg)](https://pypi.org/project/mavpose/)
 
 </div>
 
