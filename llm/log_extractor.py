@@ -179,13 +179,7 @@ class LogExtractor:
         frames: Dict[str, pd.DataFrame] = {}
         for mt, rows in raw.items():
             df = pd.DataFrame(rows)
-            # Cast numeric-looking columns to float64
-            for col in df.columns:
-                if col in _RESERVED_COLS:
-                    continue
-                frames[mt] = df
-            # Coerce numeric columns
-            df = df.copy()
+            # Coerce numeric columns to float64, then sort by time
             for col in df.columns:
                 if col not in _RESERVED_COLS:
                     df[col] = pd.to_numeric(df[col], errors="ignore")
