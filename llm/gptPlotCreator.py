@@ -31,6 +31,7 @@ import re
 import subprocess
 from typing import Dict, List, Optional
 
+import pandas as pd
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_core.output_parsers import StrOutputParser
@@ -238,7 +239,7 @@ class PlotCreator:
     def _create_embeddings(self, message_types: dict) -> None:
         """
         Embed each message type into a persisted ChromaDB collection
-        using OpenRouter’s OpenAI-compatible embeddings endpoint.
+        using OpenRouter's OpenAI-compatible embeddings endpoint.
         """
         texts = [json.dumps({mt: message_types[mt]}) for mt in message_types]
         logger.info("Creating embeddings for %d message types.", len(texts))
@@ -300,7 +301,7 @@ class PlotCreator:
         Parameters
         ----------
         human_input:
-            The user’s natural-language plot request.
+            The user's natural-language plot request.
         schema_summary:
             Dict returned by extract_dataframes() — msg_type →
             {rows, columns: {col: {dtype, min, max}}}.
@@ -350,12 +351,10 @@ class PlotCreator:
         schema_text = "{}"
         if self._extractor and self._extractor.frames:
             try:
-                # Lightweight re-summary from already-extracted frames
                 summary: Dict[str, dict] = {}
                 for mt, df in self._extractor.frames.items():
                     cols = {}
                     for col in df.columns:
-                        import pandas as pd  # local import to avoid top-level dependency
                         dtype = str(df[col].dtype)
                         if pd.api.types.is_numeric_dtype(df[col]):
                             cols[col] = {
