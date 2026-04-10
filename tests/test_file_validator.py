@@ -6,8 +6,23 @@ Uses tmp_path (pytest fixture) to create real temporary files.
 """
 
 import os
+import sys
 import pytest
 from llm.file_validator import validate_mavlink_file, FileValidationError
+
+
+def _can_symlink(tmp_path) -> bool:
+    """Return True if the current process can create symlinks."""
+    try:
+        src = tmp_path / "_probe_real.tlog"
+        src.write_bytes(b"\x00")
+        lnk = tmp_path / "_probe_link.tlog"
+        lnk.symlink_to(src)
+        lnk.unlink()
+        src.unlink()
+        return True
+    except (OSError, NotImplementedError):
+        return False
 
 
 class TestValidateMavlinkFile:
@@ -56,6 +71,11 @@ class TestValidateMavlinkFile:
             validate_mavlink_file("/nonexistent/path/flight.tlog")
 
     def test_rejects_symlink(self, tmp_path):
+        if not _can_symlink(tmp_path):
+            pytest.skip(
+                "Symlink creation requires elevated privileges on Windows. "
+                "Run as Administrator or enable Developer Mode to include this test."
+            )
         real = tmp_path / "real.tlog"
         real.write_bytes(b"\x00" * 100)
         link = tmp_path / "link.tlog"
