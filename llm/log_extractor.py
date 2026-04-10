@@ -62,6 +62,20 @@ def _timestamp_us(msg) -> Optional[int]:
     return None
 
 
+def _coerce_numeric(series: pd.Series) -> pd.Series:
+    """
+    Attempt to coerce a Series to numeric (float64).
+
+    Uses errors='coerce' (pandas >= 2.0 dropped 'ignore').
+    If the result is all-NaN the original string Series is returned
+    unchanged so we don't silently destroy text columns.
+    """
+    converted = pd.to_numeric(series, errors="coerce")
+    if converted.isna().all():
+        return series  # preserve string / mixed columns as-is
+    return converted
+
+
 class LogExtractor:
     """
     Parse a MAVLink log file into structured DataFrames.
@@ -179,10 +193,10 @@ class LogExtractor:
         frames: Dict[str, pd.DataFrame] = {}
         for mt, rows in raw.items():
             df = pd.DataFrame(rows)
-            # Coerce numeric columns to float64, then sort by time
+            # Coerce numeric columns to float64, preserve string cols
             for col in df.columns:
                 if col not in _RESERVED_COLS:
-                    df[col] = pd.to_numeric(df[col], errors="ignore")
+                    df[col] = _coerce_numeric(df[col])
             df.sort_values("time_s", inplace=True)
             df.reset_index(drop=True, inplace=True)
             frames[mt] = df
